@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleDisplayName</key>
+	<string>SenseME Fan</string>
+	<key>PluginVersion</key>
+	<string>0.1</string>
+	<key>ServerApiVersion</key>
+	<string>1.9</string>
+	<key>CFBundleIdentifier</key>
+	<string>com.pennypacker.indigoplugin.senseme</string>
+	<key>CFBundleVersion</key>
+	<string>0.0.1</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>http://bruce.pennypacker.org/tag/senseme-plugin/</string>
+		</dict>
+	</array>
+</dict>
+</plist>

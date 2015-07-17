@@ -1,0 +1,39 @@
+<?xml version="1.0"?>
+<Devices>
+    <Device type="custom" id="SenseME_fan">
+        <Name>SenseME fan</Name>
+        <ConfigUI>
+        <Field id="fanNameLabel" type="label">
+            <Label>Please ensure your fan is fully configured via the senseME app before creating your Indigo SenseME device.</Label>
+            </Field>
+        <Field id="fanName" type="textfield">
+            <Label>Fan name (as defined in the SenseME app):</Label>
+        </Field>
+        <Field id="fanIP" type="textfield">
+            <Label>Fan IP address (as defined in the SenseME app):</Label>
+        </Field>
+        </ConfigUI>
+        <States>
+            <State id="speed">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>Speed</TriggerLabel>
+                <ControlPageLabel>Fan speed</ControlPageLabel>
+            </State>
+            <State id="brightness">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>Brightness</TriggerLabel>
+                <ControlPageLabel>Brightness</ControlPageLabel>
+            </State>
+            <State id="fan_motion">
+                <ValueType boolType="OnOff">Boolean</ValueType>
+                <TriggerLabel>Fan Motion Sensor</TriggerLabel>
+                <ControlPageLabel>Fan Motion Sensor</ControlPageLabel>
+            </State>
+            <State id="light_motion">
+                <ValueType boolType="OnOff">Boolean</ValueType>
+                <TriggerLabel>Light Motion Sensor</TriggerLabel>
+                <ControlPageLabel>Light Motion Sensor</ControlPageLabel>
+            </State>
+        </States>
+    </Device>
+</Devices>

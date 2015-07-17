@@ -1,0 +1,58 @@
+<?xml version="1.0"?>
+<Actions>
+    <Action id="fanOn" deviceFilter="self.SenseME_fan">
+        <Name>Turn Fan On</Name>
+        <CallbackMethod>setFanOn</CallbackMethod>
+    </Action>
+    <Action id="fanOff" deviceFilter="self.SenseME_fan">
+        <Name>Turn Fan Off</Name>
+        <CallbackMethod>setFanOff</CallbackMethod>
+    </Action>
+    <Action id="fanSpeed" deviceFilter="self.SenseME_fan">
+        <Name>Adjust Fan Speed</Name>
+        <CallbackMethod>setFanSpeed</CallbackMethod>
+        <ConfigUI>
+            <Field id="speed" type="textfield">
+                <Label>Speed (0 through 6)</Label>
+            </Field>
+        </ConfigUI>
+    </Action>
+    <Action id="fanLightOn" deviceFilter="self.SenseME_fan">
+        <Name>Turn Fan Light On</Name>
+        <CallbackMethod>setFanLightOn</CallbackMethod>
+    </Action>
+    <Action id="fanLightOff" deviceFilter="self.SenseME_fan">
+        <Name>Turn Fan Light Off</Name>
+        <CallbackMethod>setFanLightOff</CallbackMethod>
+    </Action>
+    <Action id="fanLightBrightness" deviceFilter="self.SenseME_fan">
+        <Name>Adjust Fan Light Brightness</Name>
+        <CallbackMethod>setFanLightBrightness</CallbackMethod>
+        <ConfigUI>
+            <Field id="lightLevel" type="textfield">
+                <Label>Light Level (0 through 16)</Label>
+            </Field>
+        </ConfigUI>
+    </Action>
+    <Action id="lightMotionOff" deviceFilter="self.SenseME_fan">
+        <Name>Turn Fan Motion Sensor Off</Name>
+        <CallbackMethod>setFanMotionSensorOff</CallbackMethod>
+    </Action>
+    <Action id="lightMotionOn" deviceFilter="self.SenseME_fan">
+        <Name>Turn Fan Motion Sensor On</Name>
+        <CallbackMethod>setFanMotionSensorOn</CallbackMethod>
+    </Action>
+    <Action id="sendRawCommand" deviceFilter="self.SenseME_fan">
+        <Name>Send raw SenseME Command (use with caution)</Name>
+        <CallbackMethod>setFanRawCommand</CallbackMethod>
+        <ConfigUI>
+            <Field id="cmdLabel" type="label">
+                <Label>Caution: Use this action at your own risk. No validation is performed on commands that are executed with this action so it is up to you to ensure that they are properly formatted.</Label>
+            </Field>
+            <Field id="cmdsep" type="separator" />
+            <Field id="cmd" type="textfield">
+                <Label>Raw SenseME command</Label>
+            </Field>
+        </ConfigUI>
+    </Action>
+</Actions>
