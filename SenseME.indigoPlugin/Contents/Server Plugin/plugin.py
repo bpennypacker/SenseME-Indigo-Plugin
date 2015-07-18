@@ -48,10 +48,14 @@ class Plugin(indigo.PluginBase):
         
     ########################################
     def deviceStopComm(self, dev):
-        del self.light_level[dev.name]
-        del self.fan_speed[dev.name]
-        del self.light_motion[dev.name]
-        del self.fan_motion[dev.name]
+        if dev.name in self.light_level:
+            del self.light_level[dev.name]
+        if dev.name in self.fan_speed:
+            del self.fan_speed[dev.name]
+        if dev.name in self.light_motion:
+            del self.light_motion[dev.name]
+        if dev.name in self.fan_motion:
+            del self.fan_motion[dev.name]
         self.DebugMsg("Stopping device  %s." % dev.name)
 
     ########################################
@@ -159,7 +163,7 @@ class Plugin(indigo.PluginBase):
     def setFanLightOn(self, action):
         dev = indigo.devices[action.deviceId]
 
-        if int(self.light_level[dev.name]) > 0:
+        if dev.name in self.light_level and int(self.light_level[dev.name]) > 0:
             self.DebugMsg(u"%s light level already > 0. Not doing anything." % ( dev.name ))
             return
 
@@ -176,7 +180,7 @@ class Plugin(indigo.PluginBase):
     def setFanLightOff(self, action):
         dev = indigo.devices[action.deviceId]
 
-        if self.light_level[dev.name] == '0':
+        if dev.name in self.light_level and self.light_level[dev.name] == '0':
             self.DebugMsg(u"%s light level already 0. Not doing anything." % ( dev.name ))
             return
 
@@ -197,7 +201,7 @@ class Plugin(indigo.PluginBase):
 
         self.DebugMsg(u"set brightness to %s" % (lightLevel))
 
-        if self.light_level[dev.name] == lightLevel:
+        if dev.name in self.light_level and self.light_level[dev.name] == lightLevel:
             self.DebugMsg(u"%s light level already %s. Not doing anything." % ( dev.name, lightLevel ))
             return
 
@@ -259,7 +263,7 @@ class Plugin(indigo.PluginBase):
 
         self.DebugMsg(u"set speed to %s" % (speed))
 
-        if self.fan_speed[dev.name] == speed:
+        if dev.name in self.fan_speed and self.fan_speed[dev.name] == speed:
             self.DebugMsg(u"%s fan speed already %s. Not doing anything." % ( dev.name, speed ))
             return
 
@@ -277,7 +281,7 @@ class Plugin(indigo.PluginBase):
     def setFanOn(self, action):
         dev = indigo.devices[action.deviceId]
 
-        if int(self.fan_speed[dev.name]) > 0:
+        if dev.name in self.fan_speed and int(self.fan_speed[dev.name]) > 0:
             self.DebugMsg(u"%s fan level already > 0. Not doing anything." % ( dev.name ))
             return
 
@@ -295,7 +299,7 @@ class Plugin(indigo.PluginBase):
     def setFanOff(self, action):
         dev = indigo.devices[action.deviceId]
 
-        if int(self.fan_speed[dev.name]) == 0:
+        if dev.name in self.fan_speed and int(self.fan_speed[dev.name]) == 0:
             self.DebugMsg(u"%s fan level already 0. Not doing anything." % ( dev.name ))
             return
 
@@ -313,7 +317,7 @@ class Plugin(indigo.PluginBase):
     def setFanMotionSensorOff(self, action):
         dev = indigo.devices[action.deviceId]
 
-        if self.fan_motion[dev.name] == "OFF":
+        if dev.name in self.fan_motion and self.fan_motion[dev.name] == "OFF":
             self.DebugMsg(u"%s fan motion sensor already off. Not doing anything." % ( dev.name ))
             return
 
@@ -331,7 +335,7 @@ class Plugin(indigo.PluginBase):
     def setFanMotionSensorOn(self, action):
         dev = indigo.devices[action.deviceId]
 
-        if self.fan_motion[dev.name] == "ON":
+        if dev.name in self.fan_motion and self.fan_motion[dev.name] == "ON":
             self.DebugMsg(u"%s fan motion sensor already on. Not doing anything." % ( dev.name ))
             return
 
@@ -349,7 +353,7 @@ class Plugin(indigo.PluginBase):
     def setLightMotionSensorOff(self, action):
         dev = indigo.devices[action.deviceId]
 
-        if self.light_motion[dev.name] == "OFF":
+        if dev.name in self.light_motion and self.light_motion[dev.name] == "OFF":
             self.DebugMsg(u"%s light motion sensor already off. Not doing anything." % ( dev.name ))
             return
 
@@ -367,7 +371,7 @@ class Plugin(indigo.PluginBase):
     def setLightMotionSensorOn(self, action):
         dev = indigo.devices[action.deviceId]
 
-        if self.light_motion[dev.name] == "ON":
+        if dev.name in self.light_motion and self.light_motion[dev.name] == "ON":
             self.DebugMsg(u"%s light motion sensor already on. Not doing anything." % ( dev.name ))
             return
 
