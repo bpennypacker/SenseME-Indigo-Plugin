@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
 	<key>CFBundleDisplayName</key>
-	<string>SenseME Fan v0.2</string>
+	<string>SenseME Fan</string>
 	<key>PluginVersion</key>
 	<string>0.2</string>
 	<key>ServerApiVersion</key>
