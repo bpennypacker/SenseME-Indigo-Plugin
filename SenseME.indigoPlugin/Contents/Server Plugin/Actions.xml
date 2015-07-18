@@ -34,13 +34,21 @@
             </Field>
         </ConfigUI>
     </Action>
-    <Action id="lightMotionOff" deviceFilter="self.SenseME_fan">
+    <Action id="fanMotionOff" deviceFilter="self.SenseME_fan">
         <Name>Turn Fan Motion Sensor Off</Name>
         <CallbackMethod>setFanMotionSensorOff</CallbackMethod>
     </Action>
-    <Action id="lightMotionOn" deviceFilter="self.SenseME_fan">
+    <Action id="fanMotionOn" deviceFilter="self.SenseME_fan">
         <Name>Turn Fan Motion Sensor On</Name>
         <CallbackMethod>setFanMotionSensorOn</CallbackMethod>
+    </Action>
+    <Action id="lightMotionOff" deviceFilter="self.SenseME_fan">
+        <Name>Turn Light Motion Sensor Off</Name>
+        <CallbackMethod>setLightMotionSensorOff</CallbackMethod>
+    </Action>
+    <Action id="lightMotionOn" deviceFilter="self.SenseME_fan">
+        <Name>Turn Light Motion Sensor On</Name>
+        <CallbackMethod>setLightMotionSensorOn</CallbackMethod>
     </Action>
     <Action id="sendRawCommand" deviceFilter="self.SenseME_fan">
         <Name>Send raw SenseME Command (use with caution)</Name>

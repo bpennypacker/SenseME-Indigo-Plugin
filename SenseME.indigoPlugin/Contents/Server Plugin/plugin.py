@@ -90,25 +90,25 @@ class Plugin(indigo.PluginBase):
                         # Update the internal tracking state, and also notify Indigo
                         # of any state changes
                         if ';LIGHT;LEVEL;ACTUAL;' in cmdStr:
-                            if self.light_level[dev.name] == params[4]:
+                            if dev.name in self.light_level and self.light_level[dev.name] == params[4]:
                                 continue
                             self.light_level[dev.name] = params[4]
                             self.DebugMsg(u"set brightness state to %s" % (params[4]))
 
                         elif ';FAN;SPD;CURR;' in cmdStr:
-                            if self.fan_speed[dev.name] == params[4]:
+                            if dev.name in self.fan_speed and self.fan_speed[dev.name] == params[4]:
                                 continue
                             self.fan_speed[dev.name] = params[4]
                             self.DebugMsg(u"set speed state to %s" % (params[4]))
 
                         elif ';FAN;AUTO;' in cmdStr:
-                            if self.fan_motion[dev.name] == params[3]:
+                            if dev.name in self.fan_motion and self.fan_motion[dev.name] == params[3]:
                                 continue
                             self.fan_motion[dev.name] = params[3] 
                             self.DebugMsg(u"set fan motion state to %s" % (params[3]))
 
                         elif ';LIGHT;AUTO;' in cmdStr:
-                            if self.light_motion[dev.name] == params[3]:
+                            if dev.name in self.light_motion and self.light_motion[dev.name] == params[3]:
                                 continue
                             self.light_motion[dev.name] = params[3] 
                             self.DebugMsg(u"set light motion state to %s" % (params[3]))
@@ -128,6 +128,11 @@ class Plugin(indigo.PluginBase):
                             dev.updateStateOnServer('fan_motion', params[3])
                         elif ';LIGHT;AUTO;' in cmdStr:
                             dev.updateStateOnServer('light_motion', params[3])
+                        elif ';LIGHT;PWR;' in cmdStr:
+                            dev.updateStateOnServer('light', (params[3] == 'ON'))
+                        elif ';FAN;PWR;' in cmdStr:
+                            dev.updateStateOnServer('fan', (params[3] == 'ON'))
+
 
                 self.sleep(0.1)
 
@@ -337,5 +342,41 @@ class Plugin(indigo.PluginBase):
 
         if self.doCommand(dev, msg, fanIP, waitfor):
             self.DebugMsg(u"Received fan motion sensor off response for %s" % (fanName))
+        else:
+            indigo.server.log("Timeout waiting for response %s from %s for %s" % ( waitfor, fanIP, msg ), isError=True)
+
+    ########################################
+    def setLightMotionSensorOff(self, action):
+        dev = indigo.devices[action.deviceId]
+
+        if self.light_motion[dev.name] == "OFF":
+            self.DebugMsg(u"%s light motion sensor already off. Not doing anything." % ( dev.name ))
+            return
+
+        fanName = dev.pluginProps['fanName']
+        fanIP = dev.pluginProps['fanIP']
+        msg = "<%s;LIGHT;AUTO;OFF>" % ( fanName )
+        waitfor = 'LIGHT;AUTO;OFF';
+
+        if self.doCommand(dev, msg, fanIP, waitfor):
+            self.DebugMsg(u"Received light motion sensor off response for %s" % (fanName))
+        else:
+            indigo.server.log("Timeout waiting for response %s from %s for %s" % ( waitfor, fanIP, msg ), isError=True)
+
+    ########################################
+    def setLightMotionSensorOn(self, action):
+        dev = indigo.devices[action.deviceId]
+
+        if self.light_motion[dev.name] == "ON":
+            self.DebugMsg(u"%s light motion sensor already on. Not doing anything." % ( dev.name ))
+            return
+
+        fanName = dev.pluginProps['fanName']
+        fanIP = dev.pluginProps['fanIP']
+        msg = "<%s;LIGHT;AUTO;ON>" % ( fanName )
+        waitfor = 'LIGHT;AUTO;ON';
+
+        if self.doCommand(dev, msg, fanIP, waitfor):
+            self.DebugMsg(u"Received light motion sensor off response for %s" % (fanName))
         else:
             indigo.server.log("Timeout waiting for response %s from %s for %s" % ( waitfor, fanIP, msg ), isError=True)

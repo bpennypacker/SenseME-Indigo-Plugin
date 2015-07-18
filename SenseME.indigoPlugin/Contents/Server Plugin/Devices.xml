@@ -14,6 +14,16 @@
         </Field>
         </ConfigUI>
         <States>
+            <State id="fan">
+                <ValueType boolType="OnOff">Boolean</ValueType>
+                <TriggerLabel>Fan</TriggerLabel>
+                <ControlPageLabel>Fan</ControlPageLabel>
+            </State>
+            <State id="light">
+                <ValueType boolType="OnOff">Boolean</ValueType>
+                <TriggerLabel>Light</TriggerLabel>
+                <ControlPageLabel>Light</ControlPageLabel>
+            </State>
             <State id="speed">
                 <ValueType>Number</ValueType>
                 <TriggerLabel>Speed</TriggerLabel>
