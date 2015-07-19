@@ -21,6 +21,8 @@ class Plugin(indigo.PluginBase):
         self.light_motion = {}
         self.fan_motion = {}
 
+        self.initializing = {}
+
         self.updater = indigoPluginUpdateChecker.updateChecker(self, 'http://bruce.pennypacker.org/files/PluginVersions/SenseME.html', 7)
 
     def __del__(self):
@@ -39,12 +41,65 @@ class Plugin(indigo.PluginBase):
         self.DebugMsg(u"shutdown called")
 
     ########################################
+    def queryFan(self, fanIP, msg):
+        sock = socket.socket()
+        sock.settimeout(5)
+        sock.connect((fanIP, 31415))
+
+        sock.send(msg)
+        status = sock.recv(1024)
+        sock.close
+
+        matchObj = re.match('\(.*;([^;]+)\)', status)
+        if matchObj:
+            self.DebugMsg("query %s returned: %s" % ( msg, matchObj.group(1) ))
+            return (matchObj.group(1))
+        else:
+            self.DebugMsg("fetch %s returned: unknown: %s" % ( msg, status ))
+            return False
+
+    ########################################
     def deviceStartComm(self, dev):
-        self.light_level[dev.name] = '-1'
         self.fan_speed[dev.name] = '-1'
+        self.light_level[dev.name] = '-1'
         self.light_motion[dev.name] = '?'
         self.fan_motion[dev.name] = '?'
         self.DebugMsg("Starting device  %s." % dev.name)
+#BAP
+
+        self.initializing[dev.name] = True
+
+        fanName = dev.pluginProps['fanName']
+        fanIP = dev.pluginProps['fanIP']
+
+        # Build up a string of messgaes to query the current state of the fan
+        msg = "<%s;FAN;SPD;GET;ACTUAL>" % ( fanName )
+        res = self.queryFan(fanIP, msg)
+        if res:
+            dev.updateStateOnServer('fan', (res != '0'))
+            dev.updateStateOnServer('speed', int(res))
+            self.fan_speed[dev.name] = int(res)
+
+        msg = "<%s;LIGHT;LEVEL;GET;ACTUAL>" % ( fanName )
+        res = self.queryFan(fanIP, msg)
+        if res:
+            dev.updateStateOnServer('light', (res != '0'))
+            dev.updateStateOnServer('brightness', int(res))
+            self.light_level[dev.name] = int(res)
+
+        msg = "<%s;FAN;AUTO;GET>" % ( fanName )
+        res = self.queryFan(fanIP, msg)
+        if res:
+            dev.updateStateOnServer('fan_motion', res)
+            self.fan_motion[dev.name] = res
+
+        msg = "<%s;LIGHT;AUTO;GET>" % ( fanName )
+        res = self.queryFan(fanIP, msg)
+        if res:
+            dev.updateStateOnServer('light_motion', res)
+            self.light_motion[dev.name] = res
+        
+        del self.initializing[dev.name] 
         
     ########################################
     def deviceStopComm(self, dev):
@@ -79,6 +134,7 @@ class Plugin(indigo.PluginBase):
                 if "ALL;DEVICE;ID;GET" not in data:
                     self.DebugMsg(u"received %s from %s" % (data, addr))
 
+
                 matchObj = re.match('\((.*)\)', data)
                 if matchObj:
                     cmdStr = matchObj.group(1)
@@ -91,31 +147,9 @@ class Plugin(indigo.PluginBase):
                         if dev.pluginProps['fanName'] != fanName:
                             continue
 
-                        # Update the internal tracking state, and also notify Indigo
-                        # of any state changes
-                        if ';LIGHT;LEVEL;ACTUAL;' in cmdStr:
-                            if dev.name in self.light_level and self.light_level[dev.name] == params[4]:
-                                continue
-                            self.light_level[dev.name] = params[4]
-                            self.DebugMsg(u"set brightness state to %s" % (params[4]))
-
-                        elif ';FAN;SPD;CURR;' in cmdStr:
-                            if dev.name in self.fan_speed and self.fan_speed[dev.name] == params[4]:
-                                continue
-                            self.fan_speed[dev.name] = params[4]
-                            self.DebugMsg(u"set speed state to %s" % (params[4]))
-
-                        elif ';FAN;AUTO;' in cmdStr:
-                            if dev.name in self.fan_motion and self.fan_motion[dev.name] == params[3]:
-                                continue
-                            self.fan_motion[dev.name] = params[3] 
-                            self.DebugMsg(u"set fan motion state to %s" % (params[3]))
-
-                        elif ';LIGHT;AUTO;' in cmdStr:
-                            if dev.name in self.light_motion and self.light_motion[dev.name] == params[3]:
-                                continue
-                            self.light_motion[dev.name] = params[3] 
-                            self.DebugMsg(u"set light motion state to %s" % (params[3]))
+                        if dev.name in self.initializing and self.initializing[dev.name]:
+                            self.DebugMsg(u"initializing.  ignoring %s" % (data))
+                            continue
 
                         # If watching for an event due to an action being invoked then swallow
                         # all events for the device until we see the one we're waiting for.
@@ -150,14 +184,21 @@ class Plugin(indigo.PluginBase):
     ########################################
     def doCommand(self, dev, msg, fanIP, watch_for):
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self.watch[dev.name] = watch_for
+
+        if watch_for:
+            self.watch[dev.name] = watch_for
+
         sock.sendto(msg, (fanIP, 31415))
-        for i in range(100):
-            if dev.name in self.watch:
-                self.sleep(0.1)
-            else:
-                return True
-        return False
+ 
+        if watch_for:
+            for i in range(100):
+                if dev.name in self.watch:
+                    self.sleep(0.1)
+                else:
+                    return True
+            return False
+        else:
+            return True
 
     ########################################
     def setFanLightOn(self, action):
@@ -251,9 +292,34 @@ class Plugin(indigo.PluginBase):
         dev = indigo.devices[action.deviceId]
         fanIP = dev.pluginProps['fanIP']
         cmd = action.props.get("cmd")
-        self.DebugMsg(u"sending raw command %s to %s" % (cmd, fanIP))
-        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        sock.sendto(cmd, (fanIP, 31415))
+        if cmd:
+            self.DebugMsg(u"sending raw command %s to %s" % (cmd, fanIP))
+            sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            sock.sendto(cmd, (fanIP, 31415))
+        else:
+            # Display some debug information if the command is empty
+            self.debugLog(u"dev.name: [%s]" % (dev.name))
+
+            if dev.name in self.light_level:
+                self.debugLog(u"self.light_level: %s" % self.light_level[dev.name])
+            else:
+                self.debugLog(u"self.light_level: undef")
+
+            if dev.name in self.fan_speed:
+                self.debugLog(u"self.fan_speed: %s" % self.fan_speed[dev.name])
+            else:
+                self.debugLog(u"self.fan_speed: undef")
+
+            if dev.name in self.light_motion:
+                self.debugLog(u"self.light_motion: %s" % self.light_motion[dev.name])
+            else:
+                self.debugLog(u"self.light_motion: undef")
+
+            if dev.name in self.fan_motion:
+                self.debugLog(u"self.fan_motion: %s" % self.fan_motion[dev.name])
+            else:
+                self.debugLog(u"self.fan_motion: undef")
+
 
     ########################################
     def setFanSpeed(self, action):
