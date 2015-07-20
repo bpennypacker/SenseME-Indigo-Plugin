@@ -15,11 +15,6 @@ class Plugin(indigo.PluginBase):
     def __init__(self, pluginId, pluginDisplayName, pluginVersion, pluginPrefs):
         indigo.PluginBase.__init__(self, pluginId, pluginDisplayName, pluginVersion, pluginPrefs)
         self.debug = True
-        self.watch = {}
-        self.light_level = {}
-        self.fan_speed = {}
-        self.light_motion = {}
-        self.fan_motion = {}
 
         self.initializing = {}
 
@@ -60,12 +55,7 @@ class Plugin(indigo.PluginBase):
 
     ########################################
     def deviceStartComm(self, dev):
-        self.fan_speed[dev.name] = '-1'
-        self.light_level[dev.name] = '-1'
-        self.light_motion[dev.name] = '?'
-        self.fan_motion[dev.name] = '?'
         self.DebugMsg("Starting device  %s." % dev.name)
-#BAP
 
         self.initializing[dev.name] = True
 
@@ -78,39 +68,27 @@ class Plugin(indigo.PluginBase):
         if res:
             dev.updateStateOnServer('fan', (res != '0'))
             dev.updateStateOnServer('speed', int(res))
-            self.fan_speed[dev.name] = int(res)
 
         msg = "<%s;LIGHT;LEVEL;GET;ACTUAL>" % ( fanName )
         res = self.queryFan(fanIP, msg)
         if res:
             dev.updateStateOnServer('light', (res != '0'))
             dev.updateStateOnServer('brightness', int(res))
-            self.light_level[dev.name] = int(res)
 
         msg = "<%s;FAN;AUTO;GET>" % ( fanName )
         res = self.queryFan(fanIP, msg)
         if res:
             dev.updateStateOnServer('fan_motion', res)
-            self.fan_motion[dev.name] = res
 
         msg = "<%s;LIGHT;AUTO;GET>" % ( fanName )
         res = self.queryFan(fanIP, msg)
         if res:
             dev.updateStateOnServer('light_motion', res)
-            self.light_motion[dev.name] = res
         
         del self.initializing[dev.name] 
         
     ########################################
     def deviceStopComm(self, dev):
-        if dev.name in self.light_level:
-            del self.light_level[dev.name]
-        if dev.name in self.fan_speed:
-            del self.fan_speed[dev.name]
-        if dev.name in self.light_motion:
-            del self.light_motion[dev.name]
-        if dev.name in self.fan_motion:
-            del self.fan_motion[dev.name]
         self.DebugMsg("Stopping device  %s." % dev.name)
 
     ########################################
@@ -134,7 +112,6 @@ class Plugin(indigo.PluginBase):
                 if "ALL;DEVICE;ID;GET" not in data:
                     self.DebugMsg(u"received %s from %s" % (data, addr))
 
-
                 matchObj = re.match('\((.*)\)', data)
                 if matchObj:
                     cmdStr = matchObj.group(1)
@@ -149,13 +126,6 @@ class Plugin(indigo.PluginBase):
 
                         if dev.name in self.initializing and self.initializing[dev.name]:
                             self.DebugMsg(u"initializing.  ignoring %s" % (data))
-                            continue
-
-                        # If watching for an event due to an action being invoked then swallow
-                        # all events for the device until we see the one we're waiting for.
-                        if dev.name in self.watch:
-                            if self.watch[dev.name] in cmdStr:
-                                del self.watch[dev.name]
                             continue
 
                         if ';LIGHT;LEVEL;ACTUAL;' in cmdStr:
@@ -182,57 +152,26 @@ class Plugin(indigo.PluginBase):
         return (True, valuesDict)
 
     ########################################
-    def doCommand(self, dev, msg, fanIP, watch_for):
-        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-
-        if watch_for:
-            self.watch[dev.name] = watch_for
-
-        sock.sendto(msg, (fanIP, 31415))
- 
-        if watch_for:
-            for i in range(100):
-                if dev.name in self.watch:
-                    self.sleep(0.1)
-                else:
-                    return True
-            return False
-        else:
-            return True
-
-    ########################################
     def setFanLightOn(self, action):
         dev = indigo.devices[action.deviceId]
-
-        if dev.name in self.light_level and int(self.light_level[dev.name]) > 0:
-            self.DebugMsg(u"%s light level already > 0. Not doing anything." % ( dev.name ))
-            return
 
         fanName = dev.pluginProps['fanName']
         fanIP = dev.pluginProps['fanIP']
         msg = "<%s;LIGHT;PWR;ON>" % ( fanName )
 
-        if self.doCommand(dev, msg, fanIP, 'LIGHT;LEVEL;ACTUAL'):
-            self.DebugMsg(u"Received fan light on response for %s" % (fanName))
-        else:
-            indigo.server.log("Timeout waiting for response from %s for %s" % ( fanIP, msg ), isError=True)
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        sock.sendto(msg, (fanIP, 31415))
 
     ########################################
     def setFanLightOff(self, action):
         dev = indigo.devices[action.deviceId]
 
-        if dev.name in self.light_level and self.light_level[dev.name] == '0':
-            self.DebugMsg(u"%s light level already 0. Not doing anything." % ( dev.name ))
-            return
-
         fanName = dev.pluginProps['fanName']
         fanIP = dev.pluginProps['fanIP']
         msg = "<%s;LIGHT;PWR;OFF>" % ( fanName )
 
-        if self.doCommand(dev, msg, fanIP, 'LIGHT;LEVEL;ACTUAL'):
-            self.DebugMsg(u"Received fan light off response for %s" % (fanName))
-        else:
-            indigo.server.log("Timeout waiting for response from %s for %s" % ( fanIP, msg ), isError=True)
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        sock.sendto(msg, (fanIP, 31415))
 
     ########################################
     def setFanLightBrightness(self, action):
@@ -242,18 +181,12 @@ class Plugin(indigo.PluginBase):
 
         self.DebugMsg(u"set brightness to %s" % (lightLevel))
 
-        if dev.name in self.light_level and self.light_level[dev.name] == lightLevel:
-            self.DebugMsg(u"%s light level already %s. Not doing anything." % ( dev.name, lightLevel ))
-            return
-
         fanName = dev.pluginProps['fanName']
         fanIP = dev.pluginProps['fanIP']
         msg = "<%s;LIGHT;LEVEL;SET;%s>" % ( fanName, lightLevel)
 
-        if self.doCommand(dev, msg, fanIP, 'LIGHT;LEVEL;ACTUAL'):
-            self.DebugMsg(u"Received fan light on response for %s" % (fanName))
-        else:
-            indigo.server.log("Timeout waiting for response from %s for %s" % ( fanIP, msg ), isError=True)
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        sock.sendto(msg, (fanIP, 31415))
 
     ########################################
     def validateActionConfigUi(self, valuesDict, typeId, actionId):
@@ -296,30 +229,6 @@ class Plugin(indigo.PluginBase):
             self.DebugMsg(u"sending raw command %s to %s" % (cmd, fanIP))
             sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             sock.sendto(cmd, (fanIP, 31415))
-        else:
-            # Display some debug information if the command is empty
-            self.debugLog(u"dev.name: [%s]" % (dev.name))
-
-            if dev.name in self.light_level:
-                self.debugLog(u"self.light_level: %s" % self.light_level[dev.name])
-            else:
-                self.debugLog(u"self.light_level: undef")
-
-            if dev.name in self.fan_speed:
-                self.debugLog(u"self.fan_speed: %s" % self.fan_speed[dev.name])
-            else:
-                self.debugLog(u"self.fan_speed: undef")
-
-            if dev.name in self.light_motion:
-                self.debugLog(u"self.light_motion: %s" % self.light_motion[dev.name])
-            else:
-                self.debugLog(u"self.light_motion: undef")
-
-            if dev.name in self.fan_motion:
-                self.debugLog(u"self.fan_motion: %s" % self.fan_motion[dev.name])
-            else:
-                self.debugLog(u"self.fan_motion: undef")
-
 
     ########################################
     def setFanSpeed(self, action):
@@ -329,124 +238,76 @@ class Plugin(indigo.PluginBase):
 
         self.DebugMsg(u"set speed to %s" % (speed))
 
-        if dev.name in self.fan_speed and self.fan_speed[dev.name] == speed:
-            self.DebugMsg(u"%s fan speed already %s. Not doing anything." % ( dev.name, speed ))
-            return
-
         fanName = dev.pluginProps['fanName']
         fanIP = dev.pluginProps['fanIP']
         msg = "<%s;FAN;SPD;SET;%s>" % ( fanName, speed )
-        waitfor = "FAN;SPD;CURR"
 
-        if self.doCommand(dev, msg, fanIP, waitfor):
-            self.DebugMsg(u"Received fan speed response for %s" % (fanName))
-        else:
-            indigo.server.log("Timeout waiting for response %s from %s for %s" % ( waitfor, fanIP, msg ), isError=True)
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        sock.sendto(msg, (fanIP, 31415))
 
     ########################################
     def setFanOn(self, action):
         dev = indigo.devices[action.deviceId]
 
-        if dev.name in self.fan_speed and int(self.fan_speed[dev.name]) > 0:
-            self.DebugMsg(u"%s fan level already > 0. Not doing anything." % ( dev.name ))
-            return
-
         fanName = dev.pluginProps['fanName']
         fanIP = dev.pluginProps['fanIP']
         msg = "<%s;FAN;PWR;ON>" % ( fanName )
-        waitfor = 'FAN;PWR;ON';
 
-        if self.doCommand(dev, msg, fanIP, waitfor):
-            self.DebugMsg(u"Received fan on response for %s" % (fanName))
-        else:
-            indigo.server.log("Timeout waiting for response %s from %s for %s" % ( waitfor, fanIP, msg ), isError=True)
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        sock.sendto(msg, (fanIP, 31415))
 
     ########################################
     def setFanOff(self, action):
         dev = indigo.devices[action.deviceId]
 
-        if dev.name in self.fan_speed and int(self.fan_speed[dev.name]) == 0:
-            self.DebugMsg(u"%s fan level already 0. Not doing anything." % ( dev.name ))
-            return
-
         fanName = dev.pluginProps['fanName']
         fanIP = dev.pluginProps['fanIP']
         msg = "<%s;FAN;PWR;OFF>" % ( fanName )
-        waitfor = 'FAN;PWR;OFF';
 
-        if self.doCommand(dev, msg, fanIP, waitfor):
-            self.DebugMsg(u"Received fan off response for %s" % (fanName))
-        else:
-            indigo.server.log("Timeout waiting for response %s from %s for %s" % ( waitfor, fanIP, msg ), isError=True)
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        sock.sendto(msg, (fanIP, 31415))
 
     ########################################
     def setFanMotionSensorOff(self, action):
         dev = indigo.devices[action.deviceId]
 
-        if dev.name in self.fan_motion and self.fan_motion[dev.name] == "OFF":
-            self.DebugMsg(u"%s fan motion sensor already off. Not doing anything." % ( dev.name ))
-            return
-
         fanName = dev.pluginProps['fanName']
         fanIP = dev.pluginProps['fanIP']
         msg = "<%s;FAN;AUTO;OFF>" % ( fanName )
-        waitfor = 'FAN;AUTO;OFF';
 
-        if self.doCommand(dev, msg, fanIP, waitfor):
-            self.DebugMsg(u"Received fan motion sensor off response for %s" % (fanName))
-        else:
-            indigo.server.log("Timeout waiting for response %s from %s for %s" % ( waitfor, fanIP, msg ), isError=True)
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        sock.sendto(msg, (fanIP, 31415))
 
     ########################################
     def setFanMotionSensorOn(self, action):
         dev = indigo.devices[action.deviceId]
 
-        if dev.name in self.fan_motion and self.fan_motion[dev.name] == "ON":
-            self.DebugMsg(u"%s fan motion sensor already on. Not doing anything." % ( dev.name ))
-            return
-
         fanName = dev.pluginProps['fanName']
         fanIP = dev.pluginProps['fanIP']
         msg = "<%s;FAN;AUTO;ON>" % ( fanName )
-        waitfor = 'FAN;AUTO;ON';
 
-        if self.doCommand(dev, msg, fanIP, waitfor):
-            self.DebugMsg(u"Received fan motion sensor off response for %s" % (fanName))
-        else:
-            indigo.server.log("Timeout waiting for response %s from %s for %s" % ( waitfor, fanIP, msg ), isError=True)
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        sock.sendto(msg, (fanIP, 31415))
 
     ########################################
     def setLightMotionSensorOff(self, action):
         dev = indigo.devices[action.deviceId]
 
-        if dev.name in self.light_motion and self.light_motion[dev.name] == "OFF":
-            self.DebugMsg(u"%s light motion sensor already off. Not doing anything." % ( dev.name ))
-            return
-
         fanName = dev.pluginProps['fanName']
         fanIP = dev.pluginProps['fanIP']
         msg = "<%s;LIGHT;AUTO;OFF>" % ( fanName )
-        waitfor = 'LIGHT;AUTO;OFF';
 
-        if self.doCommand(dev, msg, fanIP, waitfor):
-            self.DebugMsg(u"Received light motion sensor off response for %s" % (fanName))
-        else:
-            indigo.server.log("Timeout waiting for response %s from %s for %s" % ( waitfor, fanIP, msg ), isError=True)
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        sock.sendto(msg, (fanIP, 31415))
 
     ########################################
     def setLightMotionSensorOn(self, action):
         dev = indigo.devices[action.deviceId]
 
-        if dev.name in self.light_motion and self.light_motion[dev.name] == "ON":
-            self.DebugMsg(u"%s light motion sensor already on. Not doing anything." % ( dev.name ))
-            return
-
         fanName = dev.pluginProps['fanName']
         fanIP = dev.pluginProps['fanIP']
         msg = "<%s;LIGHT;AUTO;ON>" % ( fanName )
-        waitfor = 'LIGHT;AUTO;ON';
 
-        if self.doCommand(dev, msg, fanIP, waitfor):
-            self.DebugMsg(u"Received light motion sensor off response for %s" % (fanName))
-        else:
-            indigo.server.log("Timeout waiting for response %s from %s for %s" % ( waitfor, fanIP, msg ), isError=True)
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        sock.sendto(msg, (fanIP, 31415))
+

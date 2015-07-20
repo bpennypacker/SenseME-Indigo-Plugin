@@ -5,9 +5,9 @@
 	<key>CFBundleDisplayName</key>
 	<string>SenseME Fan</string>
 	<key>PluginVersion</key>
-	<string>0.2</string>
+	<string>0.3.0</string>
 	<key>ServerApiVersion</key>
-	<string>1.9</string>
+	<string>1.19</string>
 	<key>CFBundleIdentifier</key>
 	<string>com.pennypacker.indigoplugin.senseme</string>
 	<key>CFBundleVersion</key>
