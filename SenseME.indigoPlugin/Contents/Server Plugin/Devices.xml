@@ -44,6 +44,12 @@
                 <TriggerLabel>Light Motion Sensor</TriggerLabel>
                 <ControlPageLabel>Light Motion Sensor</ControlPageLabel>
             </State>
+            <State id="statusString">
+                <ValueType>String</ValueType>
+                <TriggerLabel>Status String</TriggerLabel>
+                <ControlPageLabel>Fan / Light Status</ControlPageLabel>
+            </State>
         </States>
+        <UiDisplayStateId>statusString</UiDisplayStateId>
     </Device>
 </Devices>
