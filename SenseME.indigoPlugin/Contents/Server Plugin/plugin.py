@@ -21,6 +21,11 @@ class Plugin(indigo.PluginBase):
         self.fan_level = {}
         self.light_level = {}
 
+        self.fan = {}
+        self.fan_auto = {}
+        self.light = {}
+        self.light_auto = {}
+
         self.updater = indigoPluginUpdateChecker.updateChecker(self, 'http://bruce.pennypacker.org/files/PluginVersions/SenseME.html', 7)
 
     ########################################
@@ -101,28 +106,40 @@ class Plugin(indigo.PluginBase):
         fanName = dev.pluginProps['fanName']
         fanIP = dev.pluginProps['fanIP']
 
+        msg = "<%s;LIGHT;PWR;GET>" % ( fanName )
+        res = self.queryFan(fanIP, msg)
+        if res:
+            self.light[dev.id] = res
+            dev.updateStateOnServer('light', (res == 'ON'))
+
+        msg = "<%s;FAN;PWR;GET>" % ( fanName )
+        res = self.queryFan(fanIP, msg)
+        if res:
+            self.fan[dev.id] = res
+            dev.updateStateOnServer('fan', (res == 'ON'))
+
         msg = "<%s;FAN;SPD;GET;ACTUAL>" % ( fanName )
         res = self.queryFan(fanIP, msg)
         if res:
             self.fan_level[dev.id] = res
-            dev.updateStateOnServer('fan', (res != '0'))
             dev.updateStateOnServer('speed', int(res))
 
         msg = "<%s;LIGHT;LEVEL;GET;ACTUAL>" % ( fanName )
         res = self.queryFan(fanIP, msg)
         if res:
             self.light_level[dev.id] = res
-            dev.updateStateOnServer('light', (res != '0'))
             dev.updateStateOnServer('brightness', int(res))
 
         msg = "<%s;FAN;AUTO;GET>" % ( fanName )
         res = self.queryFan(fanIP, msg)
         if res:
+            self.fan_auto[dev.id] = res
             dev.updateStateOnServer('fan_motion', res)
 
         msg = "<%s;LIGHT;AUTO;GET>" % ( fanName )
         res = self.queryFan(fanIP, msg)
         if res:
+            self.light_auto[dev.id] = res
             dev.updateStateOnServer('light_motion', res)
         
         del self.initializing[dev.id] 
@@ -179,28 +196,37 @@ class Plugin(indigo.PluginBase):
                             continue
 
                         if ';LIGHT;LEVEL;ACTUAL;' in cmdStr:
-                            dev.updateStateOnServer('brightness', int(params[4]))
                             if self.light_level[dev.id] != params[4]:
+                                dev.updateStateOnServer('brightness', int(params[4]))
                                 self.light_level[dev.id] = params[4]
                                 self.updateStatusString(dev)
                         elif ';FAN;SPD;CURR;' in cmdStr:
-                            dev.updateStateOnServer('speed', int(params[4]))
                             if self.fan_level[dev.id] != params[4]:
+                                dev.updateStateOnServer('speed', int(params[4]))
                                 self.fan_level[dev.id] = params[4]
                                 self.updateStatusString(dev)
                         elif ';FAN;AUTO;' in cmdStr:
-                            dev.updateStateOnServer('fan_motion', params[3])
+                            if self.fan_auto[dev.id] != params[3]:
+                                dev.updateStateOnServer('fan_motion', params[3])
+                                self.fan_auto[dev.id] = params[3]
                         elif ';LIGHT;AUTO;' in cmdStr:
-                            dev.updateStateOnServer('light_motion', params[3])
+                            if self.light_auto[dev.id] != params[3]:
+                                dev.updateStateOnServer('light_motion', params[3])
+                                self.light_auto[dev.id] = params[3]
                         elif ';LIGHT;PWR;' in cmdStr:
-                            dev.updateStateOnServer('light', (params[3] == 'ON'))
+                            if self.light[dev.id] != params[3]:
+                                dev.updateStateOnServer('light', (params[3] == 'ON'))
+                                self.light[dev.id] = params[3]
                         elif ';FAN;PWR;' in cmdStr:
-                            dev.updateStateOnServer('fan', (params[3] == 'ON'))
+                            if self.fan[dev.id] != params[3]:
+                                dev.updateStateOnServer('fan', (params[3] == 'ON'))
+                                self.fan[dev.id] = params[3]
                         elif ';DEVICE;ID;' in cmdStr:
-                            self.MAC[dev.id] = params[3] # MAC address
-                            props = dev.pluginProps
-                            props["address"] = addr[0] 
-                            dev.replacePluginPropsOnServer(props)
+                            if self.MAC[dev.id] != params[3]:
+                                self.MAC[dev.id] = params[3] # MAC address
+				props = dev.pluginProps
+                                props["address"] = addr[0] 
+                                dev.replacePluginPropsOnServer(props)
 
                 self.sleep(0.1)
 
