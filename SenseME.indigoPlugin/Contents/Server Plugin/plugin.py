@@ -62,7 +62,8 @@ class Plugin(indigo.PluginBase):
         else:
             self.DebugMsg("fetch %s returned: unknown: %s" % ( msg, status ))
             return False
-
+    
+    
     ########################################
     def updateStatusString(self, dev):
         if self.light_level[dev.id] == '0':
@@ -92,17 +93,10 @@ class Plugin(indigo.PluginBase):
             dev.updateStateImageOnServer(indigo.kStateImageSel.FanHigh) 
         else:
             dev.updateStateImageOnServer(indigo.kStateImageSel.Error) 
-        
 
-    ########################################
-    def deviceStartComm(self, dev):
-        self.DebugMsg("Starting device  %s." % dev.name)
 
-        self.initializing[dev.id] = True
-        self.MAC[dev.id] = '';
-        self.light_level[dev.id] = '';
-        self.fan_level[dev.id] = '';
-
+	########################################
+    def getFanStatus(self, dev):
         fanName = dev.pluginProps['fanName']
         fanIP = dev.pluginProps['fanIP']
 
@@ -146,14 +140,26 @@ class Plugin(indigo.PluginBase):
         if res:
             self.light_auto[dev.id] = res
             dev.updateStateOnServer('light_motion', res)
+            
+        self.updateStatusString(dev)
+                
+
+    ########################################
+    def deviceStartComm(self, dev):
+        self.DebugMsg("Starting device  %s." % dev.name)
+
+        self.initializing[dev.id] = True
+        self.MAC[dev.id] = '';
+        self.light_level[dev.id] = '';
+        self.fan_level[dev.id] = '';
+
+        self.getFanStatus(dev)
         
         del self.initializing[dev.id] 
 
-        self.updateStatusString(dev)
-
-        msg = "<%s;DEVICE;ID;GET>" % ( fanName )
-        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        sock.sendto(msg, (fanIP, 31415))
+        #msg = "<%s;DEVICE;ID;GET>" % ( fanName )
+        #sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        #sock.sendto(msg, (fanIP, 31415))
         
         
     ########################################
@@ -162,81 +168,25 @@ class Plugin(indigo.PluginBase):
         del self.MAC[dev.id]
         del self.light_level[dev.id]
         del self.fan_level[dev.id]
-
+        
+        
     ########################################
     def runConcurrentThread(self):
-        try:
-            self.DebugMsg(u"starting runConcurrentThread()")
-            hostIP = '0.0.0.0'
-            self.DebugMsg("Starting UDP listener")
+		try:
+			while True:
+				for dev in indigo.devices.iter("self"):
+					if not dev.enabled or not dev.configured:
+						continue
+						
+					if dev.id in self.initializing and self.initializing[dev.id]:
+                        continue	
 
-            sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            sock.settimeout(2)
-            sock.bind((hostIP, 31415))
+					self.getFanStatus(dev)
 
-            while True:
-                try:
-                    data, addr = sock.recvfrom(1024)
-                except socket.timeout:
-                    self.sleep(0.1)
-                    continue
-
-                if "ALL;DEVICE;ID;GET" not in data:
-                    self.DebugMsg(u"received %s from %s" % (data, addr))
-
-                matchObj = re.match('\((.*)\)', data)
-                if matchObj:
-                    cmdStr = matchObj.group(1)
-                    params = cmdStr.split(';')
-                    fanName = params[0]
-
-                    for dev in indigo.devices.iter("self"):
-                        if not dev.enabled or not dev.configured:
-                            continue
-                        if dev.pluginProps['fanName'] != fanName and self.MAC[dev.id] != fanName:
-                            continue
-
-                        if dev.id in self.initializing and self.initializing[dev.id]:
-                            self.DebugMsg(u"initializing.  ignoring %s" % (data))
-                            continue
-
-                        if ';LIGHT;LEVEL;ACTUAL;' in cmdStr:
-                            if self.light_level[dev.id] != params[4]:
-                                dev.updateStateOnServer('brightness', int(params[4]))
-                                self.light_level[dev.id] = params[4]
-                                self.updateStatusString(dev)
-                        elif ';FAN;SPD;CURR;' in cmdStr:
-                            if self.fan_level[dev.id] != params[4]:
-                                dev.updateStateOnServer('speed', int(params[4]))
-                                self.fan_level[dev.id] = params[4]
-                                self.updateStatusString(dev)
-                        elif ';FAN;AUTO;' in cmdStr:
-                            if self.fan_auto[dev.id] != params[3]:
-                                dev.updateStateOnServer('fan_motion', params[3])
-                                self.fan_auto[dev.id] = params[3]
-                        elif ';LIGHT;AUTO;' in cmdStr:
-                            if self.light_auto[dev.id] != params[3]:
-                                dev.updateStateOnServer('light_motion', params[3])
-                                self.light_auto[dev.id] = params[3]
-                        elif ';LIGHT;PWR;' in cmdStr:
-                            if self.light[dev.id] != params[3]:
-                                dev.updateStateOnServer('light', (params[3] == 'ON'))
-                                self.light[dev.id] = params[3]
-                        elif ';FAN;PWR;' in cmdStr:
-                            if self.fan[dev.id] != params[3]:
-                                dev.updateStateOnServer('fan', (params[3] == 'ON'))
-                                self.fan[dev.id] = params[3]
-                        elif ';DEVICE;ID;' in cmdStr:
-                            if self.MAC[dev.id] != params[3]:
-                                self.MAC[dev.id] = params[3] # MAC address
-				props = dev.pluginProps
-                                props["address"] = addr[0] 
-                                dev.replacePluginPropsOnServer(props)
-
-                self.sleep(0.1)
-
-        except self.StopThread:
-            pass    # Optionally catch the StopThread exception and do any needed cleanup.
+				self.sleep(10)
+		except self.StopThread:
+			pass	# Optionally catch the StopThread exception and do any needed cleanup.
+    
 
     ########################################
     def validateDeviceConfigUi(self, valuesDict, typeId, devId):
@@ -423,4 +373,3 @@ class Plugin(indigo.PluginBase):
 
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         sock.sendto(msg, (fanIP, 31415))
-
