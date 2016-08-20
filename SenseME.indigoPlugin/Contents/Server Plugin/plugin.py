@@ -95,7 +95,7 @@ class Plugin(indigo.PluginBase):
             dev.updateStateImageOnServer(indigo.kStateImageSel.Error) 
 
 
-	########################################
+    ########################################
     def getFanStatus(self, dev):
         fanName = dev.pluginProps['fanName']
         fanIP = dev.pluginProps['fanIP']
@@ -172,20 +172,20 @@ class Plugin(indigo.PluginBase):
         
     ########################################
     def runConcurrentThread(self):
-		try:
-			while True:
-				for dev in indigo.devices.iter("self"):
-					if not dev.enabled or not dev.configured:
-						continue
-						
-					if dev.id in self.initializing and self.initializing[dev.id]:
-                        continue	
+        try:
+            while True:
+                for dev in indigo.devices.iter("self"):
+                    if not dev.enabled or not dev.configured:
+                        continue
+                        
+                    if dev.id in self.initializing and self.initializing[dev.id]:
+                        continue    
 
-					self.getFanStatus(dev)
+                    self.getFanStatus(dev)
 
-				self.sleep(10)
-		except self.StopThread:
-			pass	# Optionally catch the StopThread exception and do any needed cleanup.
+                self.sleep(10)
+        except self.StopThread:
+            pass    # Optionally catch the StopThread exception and do any needed cleanup.
     
 
     ########################################
