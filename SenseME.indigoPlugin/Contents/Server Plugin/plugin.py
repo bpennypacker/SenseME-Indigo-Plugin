@@ -128,7 +128,8 @@ class Plugin(indigo.PluginBase):
         res = self.queryFan(fanIP, msg)
         if res:
             self.light_level[dev.id] = res
-            dev.updateStateOnServer('brightness', int(res))
+            if (res != 'NOT PRESENT'):
+                dev.updateStateOnServer('brightness', int(res))
 
         msg = "<%s;FAN;AUTO;GET>" % ( fanName )
         res = self.queryFan(fanIP, msg)
