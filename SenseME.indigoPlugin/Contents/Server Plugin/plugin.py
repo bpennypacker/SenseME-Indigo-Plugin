@@ -33,18 +33,24 @@ class FanListener(threading.Thread):
         self.devID = devID
         self.sock = None
         self.tick = 0
+        self.stoprequest = threading.Event()
 
     def __connect_to_fan(self, reinit):
+        if reinit == True:
+            time.sleep(2)
+
         if self.sock == None:
             self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+
+            # Enable keepalive
+            TCP_KEEPALIVE = 0x10
+            self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
+            self.sock.setsockopt(socket.IPPROTO_TCP, TCP_KEEPALIVE, 60)
 
         try:
             self.q.put((MSG_DEBUG, self.devID, "Thread connecting to " + self.fanIP))
             self.sock.connect((self.fanIP, 31415))
             self.tick = int(time.time())
-
-            # enable keepalive
-#            self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
 
         except socket.error as e:
             msg = "Bind to %s failed. Error %s : %s" % (self.fanIP, str(e[0]), e[1])
@@ -61,7 +67,7 @@ class FanListener(threading.Thread):
     def run(self):
         self.__connect_to_fan(False)
 
-        while True:
+        while not self.stoprequest.isSet():
             try: 
                 while self.sock == None: 
                     self.__connect_to_fan(True)
@@ -84,10 +90,19 @@ class FanListener(threading.Thread):
                 msg = "%s generic error %s : %s" % (self.fanIP, str(e[0]), e[1])
                 self.q.put((MSG_DEBUG, self.devID, msg))
 
-            if int(time.time()) - self.tick > 1800: 
-                self.q.put((MSG_DEBUG, self.devID, "No messages from fan in 30 minutes. Reinitializing connection." ))
+            if int(time.time()) - self.tick > 3600: 
+                self.q.put((MSG_DEBUG, self.devID, "No messages from fan in 60 minutes. Reinitializing connection." ))
                 self.sock.close()
                 self.sock = None
+
+        if self.sock != None:
+            self.sock.close()
+
+        self.q.put((MSG_DEBUG, self.devID, "Terminating thread"))
+
+    def join(self, timeout=None):
+        self.stoprequest.set()
+        super(FanListener, self).join(timeout)
 
 
 ################################################################################
@@ -119,7 +134,7 @@ class Plugin(indigo.PluginBase):
         self.DebugMsg(u"shutdown called")
 
     ########################################
-    def queryFan(self, fanIP, msg):
+    def queryFan(self, fanIP, msg, regexp = '\(.*;([^;]+)\)', receive = True):
         status = ''
         try:
             sock = socket.socket()
@@ -127,13 +142,19 @@ class Plugin(indigo.PluginBase):
             sock.connect((fanIP, 31415))
 
             sock.send(msg)
+
+            if receive == False:
+                self.DebugMsg("sent %s" % (msg))
+                sock.close()
+                return True
+
             status = sock.recv(1024)
             sock.close()
         except socket.error as e:
-            self.DebugMsg("queryFan %s failed. %s" % (fanIP, str(e)))
+            self.DebugMsg("queryFan %s %s failed. %s" % (fanIP, msg, str(e)))
             return False
 
-        matchObj = re.match('\(.*;([^;]+)\)', status)
+        matchObj = re.match(regexp, status)
         if matchObj:
             self.DebugMsg("query %s returned: %s" % ( msg, matchObj.group(1) ))
             return (matchObj.group(1))
@@ -180,6 +201,15 @@ class Plugin(indigo.PluginBase):
         fanName = dev.pluginProps['fanName']
         fanIP = dev.pluginProps['fanIP']
 
+        msg = "<%s;DEVICE;ID;GET>" % ( fanName )
+        res = self.queryFan(fanIP, msg, regexp = '\(.*;([^;]+);[^;]+\)')
+        if res:
+            fan['MAC'] = res
+            fanName = res
+            props = dev.pluginProps
+            props["fanMAC"] = res
+            dev.replacePluginPropsOnServer(props)
+            
         msg = "<%s;LIGHT;PWR;GET>" % ( fanName )
         res = self.queryFan(fanIP, msg)
         if res:
@@ -217,15 +247,29 @@ class Plugin(indigo.PluginBase):
         if res:
             fan['light_auto'] = res
             dev.updateStateOnServer('light_motion', res)
-            
+
+        msg = "<%s;SMARTMODE;ACTUAL;GET>" % ( fanName )
+        res = self.queryFan(fanIP, msg)
+        if res:
+            fan['smartmode'] = res
+            dev.updateStateOnServer('smartmode', res)
+
+        msg = "<%s;DEVICE;SERVER;SET;PRODUCTION>" % ( fanName )
+        res = self.queryFan(fanIP, msg, receive = False)
+
         self.updateStatusString(fan)
-                
 
     ########################################
     def deviceStartComm(self, dev):
         global fan_queue
 
-        self.DebugMsg("Starting device  %s." % dev.name)
+        dev.stateListOrDisplayStateIdChanged() # in case any states added/removed after plugin upgrade
+
+        self.DebugMsg("Starting device '%s'" % dev.name)
+
+        if dev.id in self.allfans:
+            self.DebugMsg("Found device %d already running. Ignoring..." % ( dev.id ))
+            return
 
         fanIP = dev.pluginProps['fanIP']
 
@@ -240,6 +284,7 @@ class Plugin(indigo.PluginBase):
                 'fan_level'       : '',
                 'light_auto'      : '',
                 'fan_auto'        : '',
+                'smartmode'        : '',
                 'dev'             : dev
               }
 
@@ -252,8 +297,13 @@ class Plugin(indigo.PluginBase):
 
     ########################################
     def deviceStopComm(self, dev):
-        self.DebugMsg("Stopping device  %s." % dev.name)
+        self.DebugMsg("Stopping device %s." % dev.name)
 
+        fan = self.allfans[dev.id]
+
+        if fan: 
+            fan['thread'].join()
+            del self.allfans[dev.id]
 
     ########################################
     def processFanMessage(self, fan, data):
@@ -304,8 +354,15 @@ class Plugin(indigo.PluginBase):
                 if fan['MAC'] != params[3]:
                     props = dev.pluginProps
                     props["address"] = addr[0] 
-                    dev.replacePluginPropsOnServer(props)
+                    self.DebugMsg("Setting MAC to '%s'" % ( params[3] ))
                     fan['MAC'] = params[3] # MAC address
+                    props["fanMAC"] = fan['MAC']
+                    dev.replacePluginPropsOnServer(props)
+            elif ';SMARTMODE;ACTUAL' in cmdStr:
+                if fan['smartmode'] != params[3]:
+                    if fan['smartmode'] != '':
+                        dev.updateStateOnServer('smartmode', params[3])
+                    fan['smartmode'] = params[3]
 
     ########################################
     def runConcurrentThread(self):
@@ -437,6 +494,32 @@ class Plugin(indigo.PluginBase):
                 errorDict = indigo.Dict()
                 errorDict["speed"] = "Speed must be an integer between 0 and 6"
                 return (False, valuesDict, errorDict)
+        elif typeId == 'fanLearnMinSpeed':
+            try:
+                i = int(valuesDict['speed'])
+                if i < 0 or i > 6:
+                    errorDict = indigo.Dict()
+                    errorDict["speed"] = "Speed must be an integer between 0 and 6"
+                    return (False, valuesDict, errorDict)
+                else:
+                    return True
+            except:
+                errorDict = indigo.Dict()
+                errorDict["speed"] = "Speed must be an integer between 0 and 6"
+                return (False, valuesDict, errorDict)
+        elif typeId == 'fanLearnMaxSpeed':
+            try:
+                i = int(valuesDict['speed'])
+                if i < 1 or i > 7:
+                    errorDict = indigo.Dict()
+                    errorDict["speed"] = "Speed must be an integer between 1 and 7"
+                    return (False, valuesDict, errorDict)
+                else:
+                    return True
+            except:
+                errorDict = indigo.Dict()
+                errorDict["speed"] = "Speed must be an integer between 1 and 7"
+                return (False, valuesDict, errorDict)
 
         return True
 
@@ -453,13 +536,16 @@ class Plugin(indigo.PluginBase):
     ########################################
     def setFanSpeed(self, action):
         dev = indigo.devices[action.deviceId]
+        fan = self.allfans[dev.id]
+
+        f = fan['MAC']
+        if f == '':
+            f = dev.pluginProps['fanName']
 
         speed = action.props.get("speed")
 
-
-        fanName = dev.pluginProps['fanName']
         fanIP = dev.pluginProps['fanIP']
-        msg = "<%s;FAN;SPD;SET;%s>" % ( fanName, speed )
+        msg = "<%s;FAN;SPD;SET;%s>" % ( f, speed )
 
         self.DebugMsg("Sending %s" % ( msg ))
 
@@ -469,10 +555,14 @@ class Plugin(indigo.PluginBase):
     ########################################
     def setFanOn(self, action):
         dev = indigo.devices[action.deviceId]
+        fan = self.allfans[dev.id]
 
-        fanName = dev.pluginProps['fanName']
+        f = fan['MAC']
+        if f == '':
+            f = dev.pluginProps['fanName']
+
         fanIP = dev.pluginProps['fanIP']
-        msg = "<%s;FAN;PWR;ON>" % ( fanName )
+        msg = "<%s;FAN;PWR;ON>" % ( f )
 
         self.DebugMsg("Sending %s" % ( msg ))
 
@@ -482,10 +572,14 @@ class Plugin(indigo.PluginBase):
     ########################################
     def setFanOff(self, action):
         dev = indigo.devices[action.deviceId]
+        fan = self.allfans[dev.id]
 
-        fanName = dev.pluginProps['fanName']
+        f = fan['MAC']
+        if f == '':
+            f = dev.pluginProps['fanName']
+
         fanIP = dev.pluginProps['fanIP']
-        msg = "<%s;FAN;PWR;OFF>" % ( fanName )
+        msg = "<%s;FAN;PWR;OFF>" % ( f )
 
         self.DebugMsg("Sending %s" % ( msg ))
 
@@ -495,10 +589,14 @@ class Plugin(indigo.PluginBase):
     ########################################
     def setFanMotionSensorOff(self, action):
         dev = indigo.devices[action.deviceId]
+        fan = self.allfans[dev.id]
 
-        fanName = dev.pluginProps['fanName']
+        f = fan['MAC']
+        if f == '':
+            f = dev.pluginProps['fanName']
+
         fanIP = dev.pluginProps['fanIP']
-        msg = "<%s;FAN;AUTO;OFF>" % ( fanName )
+        msg = "<%s;FAN;AUTO;OFF>" % ( f )
 
         self.DebugMsg("Sending %s" % ( msg ))
 
@@ -508,10 +606,14 @@ class Plugin(indigo.PluginBase):
     ########################################
     def setFanMotionSensorOn(self, action):
         dev = indigo.devices[action.deviceId]
+        fan = self.allfans[dev.id]
 
-        fanName = dev.pluginProps['fanName']
+        f = fan['MAC']
+        if f == '':
+            f = dev.pluginProps['fanName']
+
         fanIP = dev.pluginProps['fanIP']
-        msg = "<%s;FAN;AUTO;ON>" % ( fanName )
+        msg = "<%s;FAN;AUTO;ON>" % ( f )
 
         self.DebugMsg("Sending %s" % ( msg ))
 
@@ -521,10 +623,14 @@ class Plugin(indigo.PluginBase):
     ########################################
     def setLightMotionSensorOff(self, action):
         dev = indigo.devices[action.deviceId]
+        fan = self.allfans[dev.id]
 
-        fanName = dev.pluginProps['fanName']
+        f = fan['MAC']
+        if f == '':
+            f = dev.pluginProps['fanName']
+
         fanIP = dev.pluginProps['fanIP']
-        msg = "<%s;LIGHT;AUTO;OFF>" % ( fanName )
+        msg = "<%s;LIGHT;AUTO;OFF>" % ( f )
 
         self.DebugMsg("Sending %s" % ( msg ))
 
@@ -534,12 +640,106 @@ class Plugin(indigo.PluginBase):
     ########################################
     def setLightMotionSensorOn(self, action):
         dev = indigo.devices[action.deviceId]
+        fan = self.allfans[dev.id]
 
-        fanName = dev.pluginProps['fanName']
+        f = fan['MAC']
+        if f == '':
+            f = dev.pluginProps['fanName']
+
         fanIP = dev.pluginProps['fanIP']
-        msg = "<%s;LIGHT;AUTO;ON>" % ( fanName )
+        msg = "<%s;LIGHT;AUTO;ON>" % ( f )
 
         self.DebugMsg("Sending %s" % ( msg ))
 
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         sock.sendto(msg, (fanIP, 31415))
+
+    ########################################
+    def enableFanSmartHeating(self, action):
+        dev = indigo.devices[action.deviceId]
+        fan = self.allfans[dev.id]
+
+        f = fan['MAC']
+        if f == '':
+            f = dev.pluginProps['fanName']
+
+        fanIP = dev.pluginProps['fanIP']
+        msg = "<%s;SMARTMODE;STATE;SET;HEATING>" % ( f )
+
+        self.DebugMsg("Sending %s" % ( msg ))
+
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        sock.sendto(msg, (fanIP, 31415))
+
+    ########################################
+    def enableFanSmartCooling(self, action):
+        dev = indigo.devices[action.deviceId]
+        fan = self.allfans[dev.id]
+
+        f = fan['MAC']
+        if f == '':
+            f = dev.pluginProps['fanName']
+
+        fanIP = dev.pluginProps['fanIP']
+        msg = "<%s;SMARTMODE;STATE;SET;COOLING>" % ( f )
+
+        self.DebugMsg("Sending %s" % ( msg ))
+
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        sock.sendto(msg, (fanIP, 31415))
+
+    ########################################
+    def disableFanSmartMode(self, action):
+        dev = indigo.devices[action.deviceId]
+        fan = self.allfans[dev.id]
+
+        f = fan['MAC']
+        if f == '':
+            f = dev.pluginProps['fanName']
+
+        fanIP = dev.pluginProps['fanIP']
+        msg = "<%s;SMARTMODE;STATE;SET;OFF>" % ( f )
+
+        self.DebugMsg("Sending %s" % ( msg ))
+
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        sock.sendto(msg, (fanIP, 31415))
+
+    ########################################
+    def setFanSmartModeMinSpeed(self, action):
+        dev = indigo.devices[action.deviceId]
+        fan = self.allfans[dev.id]
+
+        f = fan['MAC']
+        if f == '':
+            f = dev.pluginProps['fanName']
+
+        speed = action.props.get("speed")
+
+        fanIP = dev.pluginProps['fanIP']
+        msg = "<%s;LEARN;MINSPEED;SET;%d>" % ( f, int(speed) )
+
+        self.DebugMsg("Sending %s" % ( msg ))
+
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        sock.sendto(msg, (fanIP, 31415))
+
+    ########################################
+    def setFanSmartModeMaxSpeed(self, action):
+        dev = indigo.devices[action.deviceId]
+        fan = self.allfans[dev.id]
+
+        f = fan['MAC']
+        if f == '':
+            f = dev.pluginProps['fanName']
+
+        speed = action.props.get("speed")
+
+        fanIP = dev.pluginProps['fanIP']
+        msg = "<%s;LEARN;MAXSPEED;SET;%s>" % ( f, speed )
+
+        self.DebugMsg("Sending %s" % ( msg ))
+
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        sock.sendto(msg, (fanIP, 31415))
+
