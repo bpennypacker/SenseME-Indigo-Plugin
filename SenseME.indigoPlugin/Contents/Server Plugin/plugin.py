@@ -1,6 +1,5 @@
 #! /usr/bin/env python
 # -*- coding: utf-8 -*-
-# http://forums.indigodomo.com/viewtopic.php?f=108&t=16001&start=0
 
 import indigo
 import indigoPluginUpdateChecker
