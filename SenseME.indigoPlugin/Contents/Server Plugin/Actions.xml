@@ -13,7 +13,7 @@
         <CallbackMethod>setFanSpeed</CallbackMethod>
         <ConfigUI>
             <Field id="speed" type="textfield">
-                <Label>Speed (0 through 6)</Label>
+                <Label>Speed (0 through 7)</Label>
             </Field>
         </ConfigUI>
     </Action>
@@ -62,5 +62,35 @@
                 <Label>Raw SenseME command</Label>
             </Field>
         </ConfigUI>
+    </Action>
+    <Action id="enableSmartHeating" deviceFilter="self.SenseME_fan">
+        <Name>Enable Smarter Heating</Name>
+        <CallbackMethod>enableFanSmartHeating</CallbackMethod>
+    </Action>
+    <Action id="enableSmartCooling" deviceFilter="self.SenseME_fan">
+        <Name>Enable Smarter Cooling</Name>
+        <CallbackMethod>enableFanSmartCooling</CallbackMethod>
+    </Action>
+    <Action id="fanLearnMinSpeed" deviceFilter="self.SenseME_fan">
+        <Name>Adjust Fan Smart Mode Min Speed</Name>
+        <CallbackMethod>setFanSmartModeMinSpeed</CallbackMethod>
+        <ConfigUI>
+            <Field id="speed" type="textfield">
+                <Label>Speed (0 through 6, 0 = no min)</Label>
+            </Field>
+        </ConfigUI>
+    </Action>
+    <Action id="fanLearnMaxSpeed" deviceFilter="self.SenseME_fan">
+        <Name>Adjust Fan Smart Mode Max Speed</Name>
+        <CallbackMethod>setFanSmartModeMaxSpeed</CallbackMethod>
+        <ConfigUI>
+            <Field id="speed" type="textfield">
+                <Label>Speed (1 through 7, 7 = no max)</Label>
+            </Field>
+        </ConfigUI>
+    </Action>
+    <Action id="disableFanSmartMode" deviceFilter="self.SenseME_fan">
+        <Name>Disable Fan Smart Mode</Name>
+        <CallbackMethod>disableFanSmartMode</CallbackMethod>
     </Action>
 </Actions>
