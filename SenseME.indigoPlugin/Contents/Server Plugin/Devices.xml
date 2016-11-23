@@ -12,6 +12,9 @@
         <Field id="fanIP" type="textfield">
             <Label>Fan IP address (as defined in the SenseME app):</Label>
         </Field>
+        <Field id="fanMAC" type="textfield" readonly="YES">
+            <Label>Fan MAC address:</Label>
+        </Field>
         </ConfigUI>
         <States>
             <State id="fan">
@@ -48,6 +51,16 @@
                 <ValueType>String</ValueType>
                 <TriggerLabel>Status String</TriggerLabel>
                 <ControlPageLabel>Fan / Light Status</ControlPageLabel>
+            </State>
+            <State id="smartmode">
+                <ValueType>String</ValueType>
+                <TriggerLabel>Smart Mode</TriggerLabel>
+                <ControlPageLabel>Smart Mode</ControlPageLabel>
+            </State>
+            <State id="motion">
+                <ValueType boolType="OnOff">Boolean</ValueType>
+                <TriggerLabel>Motion Detected</TriggerLabel>
+                <ControlPageLabel>Motion Detected</ControlPageLabel>
             </State>
         </States>
         <UiDisplayStateId>statusString</UiDisplayStateId>
