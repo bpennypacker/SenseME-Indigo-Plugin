@@ -26,18 +26,19 @@ MSG_REINIT = 3
 # data received by the fan is added to the main threads queue so that the
 # main thread can process it.
 class FanListener(threading.Thread):
-    def __init__(self, q, devID, fanIP):
+    def __init__(self, q, devID, fanIP, timeoutMinutes):
         threading.Thread.__init__(self)
         self.q = q
         self.fanIP = fanIP
         self.devID = devID
         self.sock = None
+        self.timeoutMinutes = timeoutMinutes
         self.tick = 0
         self.stoprequest = threading.Event()
 
     def __connect_to_fan(self, reinit):
         if reinit == True:
-            time.sleep(2)
+            time.sleep(3)
 
         if self.sock == None:
             self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -90,8 +91,8 @@ class FanListener(threading.Thread):
                 msg = "%s generic error %s : %s" % (self.fanIP, str(e[0]), e[1])
                 self.q.put((MSG_DEBUG, self.devID, msg))
 
-            if int(time.time()) - self.tick > 3600: 
-                self.q.put((MSG_DEBUG, self.devID, "No messages from fan in 60 minutes. Reinitializing connection." ))
+            if self.timeoutMinutes > 0 and int(time.time()) - self.tick > (self.timeoutMinutes * 60 ): 
+                self.q.put((MSG_DEBUG, self.devID, "No messages from fan in %d minutes. Reinitializing connection." % ( self.timeoutMinutes)))
                 self.sock.close()
                 self.sock = None
 
@@ -166,12 +167,12 @@ class Plugin(indigo.PluginBase):
     ########################################
     def updateStatusString(self, fan):
         dev = fan['dev']
-        if fan['light_level'] == '0':
+        if fan['light'] == 'OFF':
             l = 'off'
         else:
             l = 'on'
 
-        if fan['fan_level'] == '0':
+        if fan['fan'] == 'OFF':
             f = 'off'
         else:
             f = 'on'
@@ -179,7 +180,7 @@ class Plugin(indigo.PluginBase):
         if 'debug' in self.pluginPrefs and self.pluginPrefs['debug']:
             s = "%s / %s (f:%s, l:%s)" % (f, l, fan['fan_level'], fan['light_level'])
         else:
-          s = "%s / %s" % (f, l)
+            s = "%s / %s" % (f, l)
 
         dev.updateStateOnServer('statusString', s)
 
@@ -189,7 +190,7 @@ class Plugin(indigo.PluginBase):
             dev.updateStateImageOnServer(indigo.kStateImageSel.FanLow) 
         elif fan['fan_level'] in [ '3', '4' ]:
             dev.updateStateImageOnServer(indigo.kStateImageSel.FanMedium) 
-        elif fan['fan_level'] in [ '5', '6' ]:
+        elif fan['fan_level'] in [ '5', '6', '7' ]:
             dev.updateStateImageOnServer(indigo.kStateImageSel.FanHigh) 
         else:
             dev.updateStateImageOnServer(indigo.kStateImageSel.Error) 
@@ -254,6 +255,12 @@ class Plugin(indigo.PluginBase):
             fan['smartmode'] = res
             dev.updateStateOnServer('smartmode', res)
 
+        msg = "<%s;SNSROCC;STATUS;GET>" % ( fanName )
+        res = self.queryFan(fanIP, msg)
+        if res:
+            fan['motion'] = res
+            dev.updateStateOnServer('motion', (res == 'OCCUPIED'))
+
         msg = "<%s;DEVICE;SERVER;SET;PRODUCTION>" % ( fanName )
         res = self.queryFan(fanIP, msg, receive = False)
 
@@ -265,6 +272,14 @@ class Plugin(indigo.PluginBase):
 
         dev.stateListOrDisplayStateIdChanged() # in case any states added/removed after plugin upgrade
 
+        timeout = 0
+
+        try:
+            if 'timeoutValue' in self.pluginPrefs and int(self.pluginPrefs['timeoutValue']) > 0:
+                timeout = int(self.pluginPrefs['timeoutValue'])
+        except:
+            self.DebugMsg("invalid value in timeout setting: %s" % ( self.pluginPrefs['timeoutValue'] ))
+
         self.DebugMsg("Starting device '%s'" % dev.name)
 
         if dev.id in self.allfans:
@@ -273,7 +288,7 @@ class Plugin(indigo.PluginBase):
 
         fanIP = dev.pluginProps['fanIP']
 
-        thread = FanListener(fan_queue, dev.id, fanIP)
+        thread = FanListener(fan_queue, dev.id, fanIP, timeout)
 
         fan = {
                 'thread'          : thread,
@@ -284,7 +299,8 @@ class Plugin(indigo.PluginBase):
                 'fan_level'       : '',
                 'light_auto'      : '',
                 'fan_auto'        : '',
-                'smartmode'        : '',
+                'smartmode'       : '',
+                'motion'          : '',
                 'dev'             : dev
               }
 
@@ -321,35 +337,43 @@ class Plugin(indigo.PluginBase):
             if ';LIGHT;LEVEL;ACTUAL;' in cmdStr:
                 if fan['light_level'] != params[4]:
                     if fan['light_level'] != '':
+                        self.DebugMsg('Changing light level to %s' % (params[4]))
                         dev.updateStateOnServer('brightness', int(params[4]))
                     fan['light_level'] = params[4]
                     self.updateStatusString(fan)
-            elif ';FAN;SPD;CURR;' in cmdStr:
+            elif ';FAN;SPD;ACTUAL;' in cmdStr:
                 if fan['fan_level'] != params[4]:
                     if fan['fan_level'] != '':
+                        self.DebugMsg('Changing fan speed to %s' % (params[4]))
                         dev.updateStateOnServer('speed', int(params[4]))
                     fan['fan_level'] = params[4]
-                    self.updateStatusString(dev)
+                    self.updateStatusString(fan)
             elif ';FAN;AUTO;' in cmdStr:
                 if fan['fan_auto'] != params[3]:
                     if fan['fan_auto'] != '':
+                        self.DebugMsg('Changing fan motion to %s' % (params[3]))
                         dev.updateStateOnServer('fan_motion', params[3])
                     fan['fan_auto'] = params[3]
             elif ';LIGHT;AUTO;' in cmdStr:
                 if fan['light_auto'] != params[3]:
                     if fan['light_auto'] != '':
+                        self.DebugMsg('Changing light motion to %s' % (params[3]))
                         dev.updateStateOnServer('light_motion', params[3])
                     fan['light_auto'] = params[3]
             elif ';LIGHT;PWR;' in cmdStr:
                 if fan['light'] != params[3]:
                     if fan['light'] != '':
+                        self.DebugMsg('Changing light to %s' % (params[3]))
                         dev.updateStateOnServer('light', (params[3] == 'ON'))
                     fan['light'] = params[3]
+                    self.updateStatusString(fan)
             elif ';FAN;PWR;' in cmdStr:
                 if fan['fan'] != params[3]:
                     if fan['fan'] != '':
+                        self.DebugMsg('Changing fan to %s' % (params[3]))
                         dev.updateStateOnServer('fan', (params[3] == 'ON'))
                     fan['fan'] = params[3]
+                    self.updateStatusString(fan)
             elif ';DEVICE;ID;' in cmdStr:
                 if fan['MAC'] != params[3]:
                     props = dev.pluginProps
@@ -361,8 +385,15 @@ class Plugin(indigo.PluginBase):
             elif ';SMARTMODE;ACTUAL' in cmdStr:
                 if fan['smartmode'] != params[3]:
                     if fan['smartmode'] != '':
+                        self.DebugMsg('Changing smartmode to %s' % (params[3]))
                         dev.updateStateOnServer('smartmode', params[3])
                     fan['smartmode'] = params[3]
+            elif ';SNSROCC;STATUS;' in cmdStr:
+                if fan['motion'] != params[3]:
+                    if fan['motion'] != '':
+                        self.DebugMsg('Changing motion to %s' % (params[3]))
+                        dev.updateStateOnServer('motion', (params[3] == 'OCCUPIED'))
+                    fan['motion'] = params[3]
 
     ########################################
     def runConcurrentThread(self):
@@ -484,15 +515,15 @@ class Plugin(indigo.PluginBase):
         elif typeId == 'fanSpeed':
             try:
                 i = int(valuesDict['speed'])
-                if i < 0 or i > 6:
+                if i < 0 or i > 7:
                     errorDict = indigo.Dict()
-                    errorDict["speed"] = "Speed must be an integer between 0 and 6"
+                    errorDict["speed"] = "Speed must be an integer between 0 and 7"
                     return (False, valuesDict, errorDict)
                 else:
                     return True
             except:
                 errorDict = indigo.Dict()
-                errorDict["speed"] = "Speed must be an integer between 0 and 6"
+                errorDict["speed"] = "Speed must be an integer between 0 and 7"
                 return (False, valuesDict, errorDict)
         elif typeId == 'fanLearnMinSpeed':
             try:
