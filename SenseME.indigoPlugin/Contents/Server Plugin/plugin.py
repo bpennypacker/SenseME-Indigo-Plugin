@@ -19,13 +19,12 @@ MSG_FAN = 1
 MSG_DEBUG = 2
 MSG_REINIT = 3
 
-
 ################################################################################
 # Create a thread that just establishes a TCP connection with a fan. Any
 # data received by the fan is added to the main threads queue so that the
 # main thread can process it.
 class FanListener(threading.Thread):
-    def __init__(self, q, devID, fanIP, timeoutMinutes):
+    def __init__(self, q, devID, fanIP, timeoutMinutes, fanID):
         threading.Thread.__init__(self)
         self.q = q
         self.fanIP = fanIP
@@ -34,6 +33,7 @@ class FanListener(threading.Thread):
         self.timeoutMinutes = timeoutMinutes
         self.tick = 0
         self.stoprequest = threading.Event()
+        self.fanID = fanID
 
     def __connect_to_fan(self, reinit):
         if reinit == True:
@@ -47,8 +47,9 @@ class FanListener(threading.Thread):
             self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
             self.sock.setsockopt(socket.IPPROTO_TCP, TCP_KEEPALIVE, 60)
 
+        self.q.put((MSG_DEBUG, self.devID, "Thread connecting to " + self.fanIP))
+
         try:
-            self.q.put((MSG_DEBUG, self.devID, "Thread connecting to " + self.fanIP))
             self.sock.connect((self.fanIP, 31415))
             self.tick = int(time.time())
 
@@ -64,6 +65,15 @@ class FanListener(threading.Thread):
 
         self.sock.setblocking(0)
 
+        # Send a GETALL to the newly connected fan to learn al about it
+        msg = "<%s;GETALL>" % ( self.fanID )
+        self.sock.send(msg)
+
+        # GETALL apparently doesn't return the status of the motion detector, so also request
+        # the motion detector status
+        msg = "<%s;SNSROCC;STATUS;GET>" % ( self.fanID )
+        self.sock.send(msg)
+
     def run(self):
         self.__connect_to_fan(False)
 
@@ -72,14 +82,19 @@ class FanListener(threading.Thread):
                 while self.sock == None: 
                     self.__connect_to_fan(True)
                     if self.sock == None:
-                        self.q.put((MSG_DEBUG, self.devID, "Connection failed.  Sleeping for 60 seconds."))
+                        self.q.put((MSG_DEBUG, self.devID, "Connection failed. Sleeping for 60 seconds."))
                         time.sleep(60)
 
                 ready = select.select([self.sock], [], [], 5)
                 if ready[0]:
                     data = self.sock.recv(1024)
                     self.tick = int(time.time())
-                    self.q.put((MSG_FAN, self.devID, data))
+
+                    # The data received may have multiple parenthesized data points. Split them
+                    # and put each individual message onto the queue
+                    # Convert "(msg1)(msg2)(msg3)" to "(msg1)|(msg2)|(msg3)" then split on the '|'
+                    for p in data.replace(')(', ')|(').split('|'):
+                        self.q.put((MSG_FAN, self.devID, p))
 
             except socket.error as e: 
                 msg = "%s socket error %s : %s" % (self.fanIP, str(e[0]), e[1])
@@ -194,7 +209,6 @@ class Plugin(indigo.PluginBase):
         else:
             dev.updateStateImageOnServer(indigo.kStateImageSel.Error) 
 
-
     ########################################
     def getFanStatus(self, fan):
         dev = fan['dev']
@@ -209,61 +223,6 @@ class Plugin(indigo.PluginBase):
             props = dev.pluginProps
             props["fanMAC"] = res
             dev.replacePluginPropsOnServer(props)
-            
-        msg = "<%s;LIGHT;PWR;GET>" % ( fanName )
-        res = self.queryFan(fanIP, msg)
-        if res:
-            fan['light'] = res
-            dev.updateStateOnServer('light', (res == 'ON'))
-
-        msg = "<%s;FAN;PWR;GET>" % ( fanName )
-        res = self.queryFan(fanIP, msg)
-        if res:
-            fan['fan'] = res
-            dev.updateStateOnServer('fan', (res == 'ON'))
-
-        msg = "<%s;FAN;SPD;GET;ACTUAL>" % ( fanName )
-        res = self.queryFan(fanIP, msg)
-        if res:
-            fan['fan_level'] = res
-            dev.updateStateOnServer('speed', int(res))
-
-        msg = "<%s;LIGHT;LEVEL;GET;ACTUAL>" % ( fanName )
-        res = self.queryFan(fanIP, msg)
-        if res:
-            if (res == 'NOT PRESENT'):
-                res = '0'
-            dev.updateStateOnServer('brightness', int(res))
-            fan['light_level'] = res
-
-        msg = "<%s;FAN;AUTO;GET>" % ( fanName )
-        res = self.queryFan(fanIP, msg)
-        if res:
-            fan['fan_auto'] = res
-            dev.updateStateOnServer('fan_motion', res)
-
-        msg = "<%s;LIGHT;AUTO;GET>" % ( fanName )
-        res = self.queryFan(fanIP, msg)
-        if res:
-            fan['light_auto'] = res
-            dev.updateStateOnServer('light_motion', res)
-
-        msg = "<%s;SMARTMODE;ACTUAL;GET>" % ( fanName )
-        res = self.queryFan(fanIP, msg)
-        if res:
-            fan['smartmode'] = res
-            dev.updateStateOnServer('smartmode', res)
-
-        msg = "<%s;SNSROCC;STATUS;GET>" % ( fanName )
-        res = self.queryFan(fanIP, msg)
-        if res:
-            fan['motion'] = res
-            dev.updateStateOnServer('motion', (res == 'OCCUPIED'))
-
-        msg = "<%s;DEVICE;SERVER;SET;PRODUCTION>" % ( fanName )
-        res = self.queryFan(fanIP, msg, receive = False)
-
-        self.updateStatusString(fan)
 
     ########################################
     def deviceStartComm(self, dev):
@@ -287,10 +246,7 @@ class Plugin(indigo.PluginBase):
 
         fanIP = dev.pluginProps['fanIP']
 
-        thread = FanListener(fan_queue, dev.id, fanIP, timeout)
-
         fan = {
-                'thread'          : thread,
                 'MAC'             : '',
                 'light'           : '',
                 'fan'             : '',
@@ -300,15 +256,41 @@ class Plugin(indigo.PluginBase):
                 'fan_auto'        : '',
                 'smartmode'       : '',
                 'motion'          : '',
+                'whoosh'          : '',
                 'dev'             : dev
               }
 
         self.allfans[dev.id] = fan
 
-        self.getFanStatus(fan)
+        self.getFanStatus(fan) 
 
+        f = fan['MAC']
+        if f == '':
+            f = dev.name
+
+        thread = FanListener(fan_queue, dev.id, fanIP, timeout, f)
+        fan['thread'] = thread
         thread.daemon = True
         thread.start()
+
+    ########################################
+    def debugState(self, action):
+        dev = indigo.devices[action.deviceId]
+        fan = self.allfans[dev.id]
+        self.DebugMsg("dumping fan dict:")
+        self.DebugMsg("Fan name    : %s" % ( fan['dev'].name ))
+        self.DebugMsg("MAC         : %s" % ( fan['MAC'] ))
+        self.DebugMsg("light       : %s" % ( fan['light'] ))
+        self.DebugMsg("fan         : %s" % ( fan['fan'] ))
+        self.DebugMsg("light level : %s" % ( fan['light_level'] ))
+        self.DebugMsg("fan level   : %s" % ( fan['fan_level'] ))
+        self.DebugMsg("light auto  : %s" % ( fan['light_auto'] ))
+        self.DebugMsg("fan auto    : %s" % ( fan['fan_auto'] ))
+        self.DebugMsg("smart mode  : %s" % ( fan['smartmode'] ))
+        self.DebugMsg("motion      : %s" % ( fan['motion'] ))
+        self.DebugMsg("whoosh      : %s" % ( fan['whoosh'] ))
+        self.DebugMsg("dump complete")
+
 
     ########################################
     def deviceStopComm(self, dev):
@@ -393,6 +375,12 @@ class Plugin(indigo.PluginBase):
                         self.DebugMsg('Changing motion to %s' % (params[3]))
                         dev.updateStateOnServer('motion', (params[3] == 'OCCUPIED'))
                     fan['motion'] = params[3]
+            elif ';FAN;WHOOSH;STATUS;' in cmdStr:
+                if fan['motion'] != params[4]:
+                    if fan['whoosh'] != '':
+                        self.DebugMsg('Changing whoosh to %s' % (params[4]))
+                        dev.updateStateOnServer('whoosh', params[4])
+                    fan['whoosh'] = params[4]
 
     ########################################
     def runConcurrentThread(self):
@@ -407,8 +395,13 @@ class Plugin(indigo.PluginBase):
                 msgtype = msg[0]
                 devID = msg[1]
                 data = msg[2]
+                fan = None
 
-                fan = self.allfans[devID]
+                if devID in self.allfans:
+                    fan = self.allfans[devID]
+                else:
+                    continue
+
                 name = fan['dev'].pluginProps['fanName']
 
                 if msgtype == MSG_DEBUG:
@@ -561,7 +554,7 @@ class Plugin(indigo.PluginBase):
         if cmd:
             self.DebugMsg(u"sending command %s to %s" % (cmd, fanIP))
             sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            sock.sendto(cmd, (fanIP, 31415))
+            sock.sendto(cmd + '\n', (fanIP, 31415))
 
     ########################################
     def setFanSpeed(self, action):
@@ -767,6 +760,40 @@ class Plugin(indigo.PluginBase):
 
         fanIP = dev.pluginProps['fanIP']
         msg = "<%s;LEARN;MAXSPEED;SET;%s>" % ( f, speed )
+
+        self.DebugMsg("Sending %s" % ( msg ))
+
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        sock.sendto(msg, (fanIP, 31415))
+
+    ########################################
+    def setFanWhooshModeOn(self, action):
+        dev = indigo.devices[action.deviceId]
+        fan = self.allfans[dev.id]
+
+        f = fan['MAC']
+        if f == '':
+            f = dev.pluginProps['fanName']
+
+        fanIP = dev.pluginProps['fanIP']
+        msg = "<%s;FAN;WHOOSH;ON>" % ( f )
+
+        self.DebugMsg("Sending %s" % ( msg ))
+
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        sock.sendto(msg, (fanIP, 31415))
+
+    ########################################
+    def setFanWhooshModeOff(self, action):
+        dev = indigo.devices[action.deviceId]
+        fan = self.allfans[dev.id]
+
+        f = fan['MAC']
+        if f == '':
+            f = dev.pluginProps['fanName']
+
+        fanIP = dev.pluginProps['fanIP']
+        msg = "<%s;FAN;WHOOSH;OFF>" % ( f )
 
         self.DebugMsg("Sending %s" % ( msg ))
 

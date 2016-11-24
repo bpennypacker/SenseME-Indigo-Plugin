@@ -93,4 +93,18 @@
         <Name>Disable Fan Smart Mode</Name>
         <CallbackMethod>disableFanSmartMode</CallbackMethod>
     </Action>
+<!--
+    <Action id="debugState" deviceFilter="self.SenseME_fan">
+        <Name>debug</Name>
+        <CallbackMethod>debugState</CallbackMethod>
+    </Action>
+-->
+    <Action id="whooshOn" deviceFilter="self.SenseME_fan">
+        <Name>Turn Fan Whoosh Mode On</Name>
+        <CallbackMethod>setFanWhooshModeOn</CallbackMethod>
+    </Action>
+    <Action id="whooshOff" deviceFilter="self.SenseME_fan">
+        <Name>Turn Fan Whoosh Mode Off</Name>
+        <CallbackMethod>setFanWhooshModeOff</CallbackMethod>
+    </Action>
 </Actions>

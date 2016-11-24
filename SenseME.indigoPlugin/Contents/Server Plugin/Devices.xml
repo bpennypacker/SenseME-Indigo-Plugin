@@ -62,6 +62,11 @@
                 <TriggerLabel>Motion Detected</TriggerLabel>
                 <ControlPageLabel>Motion Detected</ControlPageLabel>
             </State>
+            <State id="whoosh">
+                <ValueType boolType="OnOff">Boolean</ValueType>
+                <TriggerLabel>Whoosh</TriggerLabel>
+                <ControlPageLabel>Whoosh</ControlPageLabel>
+            </State>
         </States>
         <UiDisplayStateId>statusString</UiDisplayStateId>
     </Device>
