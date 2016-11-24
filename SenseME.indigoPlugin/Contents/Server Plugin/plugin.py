@@ -414,6 +414,9 @@ class Plugin(indigo.PluginBase):
                     fan['fan_level'] = ''
                     fan['light_auto'] = ''
                     fan['fan_auto'] = ''
+                    fan['smartmode'] = ''
+                    fan['motion'] = ''
+                    fan['whoosh'] = ''
                     self.getFanStatus(fan)
 
                 elif msgtype == MSG_FAN:
