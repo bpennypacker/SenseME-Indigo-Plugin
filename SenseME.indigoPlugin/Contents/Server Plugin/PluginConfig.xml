@@ -1,6 +1,6 @@
 <?xml version="1.0"?>
 <PluginConfig>
-    <SupportURL>http://bruce.pennypacker.org/tag/senseme-plugin/</SupportURL>
+	<SupportURL>http://bruce.pennypacker.org/2016/11/22/senseme-plugin-reference/</SupportURL>
 	<Field id="title" type="label" alignText="center" fontColor="blue">
 		<Label>SenseME Fan Plugin Configuration
 		</Label>
@@ -9,7 +9,7 @@
 		<Label>Enable Plugin Update Notifications:</Label>
 	</Field>
 	<Field id="noticeLabel" type="label" fontSize="small" fontColor="darkgray">
-		<Label>If you'd like to be notified via email when new versions of the NOAA Weather Plus plugin become available, enable this option.</Label>
+		<Label>If you'd like to be notified via email when new versions of the SenseME Fan plugin become available, enable this option.</Label>
 	</Field>
 	<Field id="updaterEmail" type="textfield" visibleBindingId="updaterEmailsEnabled" visibleBindingValue="true">
 		<Label>Email Address:</Label>
@@ -24,5 +24,13 @@
 	</Field>
 	<Field id="debug" type="checkbox">
 		<Label>Enable debugging:</Label>
+	</Field>
+	<Field id="sep2" type="separator"/>
+	<Field id="timeoutLabel" type="label" fontColor="darkgray" fontSize="small">
+		<Label>If the plugin is having trouble remaining connected to the fan (triggers don't execute) then adjusting this value may help. If non-zero then the plugin will attempt to re-establish its connection with each fan after this many minutes of inactivity. A value of 0 will disable this feature. Note that you must restart the plugin for changes to this to take effect.
+		</Label>
+	</Field>
+	<Field id="timeoutValue" type="textfield" alignWithControl="true" fontSize="small" fontColor="darkgray" defaultValue="0">
+		<Label>Timeout in minutes:</Label>
 	</Field>
 </PluginConfig>
