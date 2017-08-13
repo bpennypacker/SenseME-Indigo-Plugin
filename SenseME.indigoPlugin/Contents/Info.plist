@@ -5,7 +5,7 @@
 	<key>CFBundleDisplayName</key>
 	<string>SenseME Fan</string>
 	<key>PluginVersion</key>
-	<string>0.6</string>
+	<string>0.6.1</string>
 	<key>ServerApiVersion</key>
 	<string>1.19</string>
 	<key>CFBundleIdentifier</key>

@@ -34,6 +34,7 @@ class FanListener(threading.Thread):
         self.tick = 0
         self.stoprequest = threading.Event()
         self.fanID = fanID
+        self.leftover = ''
 
     def __connect_to_fan(self, reinit):
         if reinit == True:
@@ -87,14 +88,22 @@ class FanListener(threading.Thread):
 
                 ready = select.select([self.sock], [], [], 5)
                 if ready[0]:
-                    data = self.sock.recv(1024)
+                    data = self.sock.recv(2048)
                     self.tick = int(time.time())
+
+                    data = self.leftover + data
+                    self.leftover = ''
 
                     # The data received may have multiple parenthesized data points. Split them
                     # and put each individual message onto the queue
                     # Convert "(msg1)(msg2)(msg3)" to "(msg1)|(msg2)|(msg3)" then split on the '|'
                     for p in data.replace(')(', ')|(').split('|'):
-                        self.q.put((MSG_FAN, self.devID, p))
+                        if p[-1] != ')':
+                            self.leftover = p
+                            msg = "saving for next select: '%s'" % ( p )
+                            self.q.put((MSG_DEBUG, self.devID, msg))
+                        else:
+                            self.q.put((MSG_FAN, self.devID, p))
 
             except socket.error as e: 
                 msg = "%s socket error %s : %s" % (self.fanIP, str(e[0]), e[1])
