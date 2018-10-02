@@ -15,6 +15,13 @@
         <Field id="fanMAC" type="textfield" readonly="YES">
             <Label>Fan MAC address:</Label>
         </Field>
+        <Field id="fanTempUnits" type="menu" defaultValue="F">
+            <Label>Temperature units:</Label>
+            <List>
+                    <Option value="F">Fahrenheit</Option>
+                    <Option value="C">Celsius</Option>
+           </List>
+        </Field>
         </ConfigUI>
         <States>
             <State id="fan">
@@ -66,6 +73,43 @@
                 <ValueType boolType="OnOff">Boolean</ValueType>
                 <TriggerLabel>Whoosh</TriggerLabel>
                 <ControlPageLabel>Whoosh</ControlPageLabel>
+            </State>
+            <State id="coolingIdealTemp">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>Cooling Ideal Temperature</TriggerLabel>
+                <ControlPageLabel>Cooling Ideal Temperature</ControlPageLabel>
+            </State>
+            <State id="sleepIdealTemp">
+                <ValueType>Number</ValueType>
+                <TriggerLabel>Sleep Ideal Temperature</TriggerLabel>
+                <ControlPageLabel>Sleep Ideal Temperature</ControlPageLabel>
+            </State>
+            <State id="indicators">
+                <ValueType boolType="OnOff">Boolean</ValueType>
+                <TriggerLabel>Indicators</TriggerLabel>
+                <ControlPageLabel>Indicators</ControlPageLabel>
+            </State>
+            <State id="beep">
+                <ValueType boolType="OnOff">Boolean</ValueType>
+                <TriggerLabel>Beep</TriggerLabel>
+                <ControlPageLabel>Beep</ControlPageLabel>
+            </State>
+            <State id="sleepMode">
+                <ValueType boolType="OnOff">Boolean</ValueType>
+                <TriggerLabel>Sleep Mode</TriggerLabel>
+                <ControlPageLabel>Sleep Mode</ControlPageLabel>
+            </State>
+            <State id="direction">
+                <ValueType>
+                    <List>
+                        <Option value="forward">Forward</Option>
+                        <Option value="reverse">Reverse</Option>
+		    </List>
+                </ValueType>
+                <TriggerLabel>Direction Changed</TriggerLabel>
+                <TriggerLabelPrefix>Direction Changed to</TriggerLabelPrefix>
+                <ControlPageLabel>Direction</ControlPageLabel>
+                <ControlPageLabelPrefix>Direction is</ControlPageLabelPrefix>
             </State>
         </States>
         <UiDisplayStateId>statusString</UiDisplayStateId>

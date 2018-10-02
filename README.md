@@ -10,7 +10,13 @@ If you have a Haiku fan with the optional SenseME add-on then this plug-in will 
 * Fan Speed
 * Light Brightness
 * Smart Mode (Cooling/Heating/Off)
-* Whoosh Mode
+* Whoosh Mode (On/Off)
+* Sleep Mode (On/Off)
+* Beep (On/Off)
+* Indicators (On/Off)
+* Cooling Temperature Changed
+* Sleep Temperature Changed
+* Direction (Forward/Reverse)
 
 ### Actions
 
@@ -22,6 +28,12 @@ If you have a Haiku fan with the optional SenseME add-on then this plug-in will 
 * Turn Light motion sensor On/Off
 * Enable Smart Mode
 * Turn Whoosh Mode On/Off
+* Set Fan Direction Forward/Reverse
+* Set Fan Indicators On/Off
+* Set Fan Beep On/Off
+* Set Sleep Mode On/Off
+* Adjust Sleep Temperature
+* Adjust Smart Cooling Temperature
 
 For more detailed information on this plugin please see [this documentation](http://bruce.pennypacker.org/tag/senseme-plugin/).
 

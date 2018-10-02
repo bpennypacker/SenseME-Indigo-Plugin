@@ -107,4 +107,54 @@
         <Name>Turn Fan Whoosh Mode Off</Name>
         <CallbackMethod>setFanWhooshModeOff</CallbackMethod>
     </Action>
+    <Action id="directionForward" deviceFilter="self.SenseME_fan">
+        <Name>Set Fan Direction Forward</Name>
+        <CallbackMethod>setFanDirectionForward</CallbackMethod>
+    </Action>
+    <Action id="directionReverse" deviceFilter="self.SenseME_fan">
+        <Name>Set Fan Direction Reverse</Name>
+        <CallbackMethod>setFanDirectionReverse</CallbackMethod>
+    </Action>
+    <Action id="indicatorsOn" deviceFilter="self.SenseME_fan">
+        <Name>Set Fan Indicators On</Name>
+        <CallbackMethod>setFanIndicatorsOn</CallbackMethod>
+    </Action>
+    <Action id="indicatorsOff" deviceFilter="self.SenseME_fan">
+        <Name>Set Fan Indicators Off</Name>
+        <CallbackMethod>setFanIndicatorsOff</CallbackMethod>
+    </Action>
+    <Action id="beepOn" deviceFilter="self.SenseME_fan">
+        <Name>Set Fan Beep On</Name>
+        <CallbackMethod>setFanBeepOn</CallbackMethod>
+    </Action>
+    <Action id="beepOff" deviceFilter="self.SenseME_fan">
+        <Name>Set Fan Beep Off</Name>
+        <CallbackMethod>setFanBeepOff</CallbackMethod>
+    </Action>
+    <Action id="sleepModeOn" deviceFilter="self.SenseME_fan">
+        <Name>Set Fan Sleep Mode On</Name>
+        <CallbackMethod>setFanSleepModeOn</CallbackMethod>
+    </Action>
+    <Action id="sleepModeOff" deviceFilter="self.SenseME_fan">
+        <Name>Set Fan Sleep Mode Off</Name>
+        <CallbackMethod>setFanSleepModeOff</CallbackMethod>
+    </Action>
+    <Action id="fanSmartSleepIdealTemp" deviceFilter="self.SenseME_fan">
+        <Name>Adjust Fan Smart Sleep Ideal Temperature</Name>
+        <CallbackMethod>setFanSmartSleepIdealTemp</CallbackMethod>
+        <ConfigUI>
+            <Field id="sleepTemp" type="textfield">
+                <Label>Temperature (50-90 degrees F or 10-32 degrees C)</Label>
+            </Field>
+        </ConfigUI>
+    </Action>
+    <Action id="fanSmartCoolingIdealTemp" deviceFilter="self.SenseME_fan">
+        <Name>Adjust Fan Smart Cooling Ideal Temperature</Name>
+        <CallbackMethod>setFanSmartCoolingIdealTemp</CallbackMethod>
+        <ConfigUI>
+            <Field id="coolingTemp" type="textfield">
+                <Label>Temperature (50-90 degrees F or 10-32 degrees C)</Label>
+            </Field>
+        </ConfigUI>
+    </Action>
 </Actions>

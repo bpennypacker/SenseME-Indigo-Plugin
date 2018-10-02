@@ -79,8 +79,8 @@ class FanListener(threading.Thread):
         self.__connect_to_fan(False)
 
         while not self.stoprequest.isSet():
-            try: 
-                while self.sock == None: 
+            try:
+                while self.sock == None:
                     self.__connect_to_fan(True)
                     if self.sock == None:
                         self.q.put((MSG_DEBUG, self.devID, "Connection failed. Sleeping for 60 seconds."))
@@ -105,7 +105,7 @@ class FanListener(threading.Thread):
                         else:
                             self.q.put((MSG_FAN, self.devID, p))
 
-            except socket.error as e: 
+            except socket.error as e:
                 msg = "%s socket error %s : %s" % (self.fanIP, str(e[0]), e[1])
                 self.q.put((MSG_DEBUG, self.devID, msg))
                 self.sock.close()
@@ -114,7 +114,7 @@ class FanListener(threading.Thread):
                 msg = "%s generic error %s : %s" % (self.fanIP, str(e[0]), e[1])
                 self.q.put((MSG_DEBUG, self.devID, msg))
 
-            if self.timeoutMinutes > 0 and int(time.time()) - self.tick > (self.timeoutMinutes * 60 ): 
+            if self.timeoutMinutes > 0 and int(time.time()) - self.tick > (self.timeoutMinutes * 60 ):
                 self.q.put((MSG_DEBUG, self.devID, "No messages from fan in %d minutes. Reinitializing connection." % ( self.timeoutMinutes)))
                 self.sock.close()
                 self.sock = None
@@ -185,10 +185,12 @@ class Plugin(indigo.PluginBase):
         else:
             self.DebugMsg("query %s returned: unknown: %s" % ( msg, status ))
             return False
-    
-    
+
     ########################################
     def updateStatusString(self, fan):
+        if fan['light'] == '' or fan['fan'] == '' or fan['fan_level'] == '' or fan['light_level'] == '' :
+            return
+
         dev = fan['dev']
         if fan['light'] == 'OFF':
             l = 'off'
@@ -205,18 +207,20 @@ class Plugin(indigo.PluginBase):
         else:
             s = "%s / %s" % (f, l)
 
-        dev.updateStateOnServer('statusString', s)
+        if s != fan['status_string']:
+            fan['status_string'] = s
+            dev.updateStateOnServer('statusString', s)
 
-        if fan['fan_level'] == '0':
-            dev.updateStateImageOnServer(indigo.kStateImageSel.FanOff) 
-        elif fan['fan_level'] in [ '1', '2' ]:
-            dev.updateStateImageOnServer(indigo.kStateImageSel.FanLow) 
-        elif fan['fan_level'] in [ '3', '4' ]:
-            dev.updateStateImageOnServer(indigo.kStateImageSel.FanMedium) 
-        elif fan['fan_level'] in [ '5', '6', '7' ]:
-            dev.updateStateImageOnServer(indigo.kStateImageSel.FanHigh) 
-        else:
-            dev.updateStateImageOnServer(indigo.kStateImageSel.Error) 
+            if fan['fan_level'] == '0':
+                dev.updateStateImageOnServer(indigo.kStateImageSel.FanOff)
+            elif fan['fan_level'] in [ '1', '2' ]:
+                dev.updateStateImageOnServer(indigo.kStateImageSel.FanLow)
+            elif fan['fan_level'] in [ '3', '4' ]:
+                dev.updateStateImageOnServer(indigo.kStateImageSel.FanMedium)
+            elif fan['fan_level'] in [ '5', '6', '7' ]:
+                dev.updateStateImageOnServer(indigo.kStateImageSel.FanHigh)
+            else:
+                dev.updateStateImageOnServer(indigo.kStateImageSel.Error)
 
     ########################################
     def getFanStatus(self, fan):
@@ -266,12 +270,19 @@ class Plugin(indigo.PluginBase):
                 'smartmode'       : '',
                 'motion'          : '',
                 'whoosh'          : '',
+                'beep'            : '',
+                'indicators'      : '',
+                'direction'       : '',
+                'coolingIdealTemp': '',
+                'sleepIdealTemp'  : '',
+                'status_string'   : '',
+                'sleepMode'       : '',
                 'dev'             : dev
               }
 
         self.allfans[dev.id] = fan
 
-        self.getFanStatus(fan) 
+        self.getFanStatus(fan)
 
         f = fan['MAC']
         if f == '':
@@ -298,6 +309,13 @@ class Plugin(indigo.PluginBase):
         self.DebugMsg("smart mode  : %s" % ( fan['smartmode'] ))
         self.DebugMsg("motion      : %s" % ( fan['motion'] ))
         self.DebugMsg("whoosh      : %s" % ( fan['whoosh'] ))
+        self.DebugMsg("beep        : %s" % ( fan['beep'] ))
+        self.DebugMsg("indicators  : %s" % ( fan['indicators'] ))
+        self.DebugMsg("direction   : %s" % ( fan['direction'] ))
+        self.DebugMsg("cooling temp: %s" % ( fan['coolingIdealTemp'] ))
+        self.DebugMsg("sleep temp  : %s" % ( fan['sleepIdealTemp'] ))
+        self.DebugMsg("status      : %s" % ( fan['status_string'] ))
+        self.DebugMsg("sleep mode  : %s" % ( fan['sleepMode'] ))
         self.DebugMsg("dump complete")
 
 
@@ -307,7 +325,7 @@ class Plugin(indigo.PluginBase):
 
         fan = self.allfans[dev.id]
 
-        if fan: 
+        if fan:
             fan['thread'].join()
             del self.allfans[dev.id]
 
@@ -326,70 +344,128 @@ class Plugin(indigo.PluginBase):
 
             if ';LIGHT;LEVEL;ACTUAL;' in cmdStr:
                 if fan['light_level'] != params[4]:
-                    if fan['light_level'] != '':
-                        self.DebugMsg('Changing light level to %s' % (params[4]))
-                        dev.updateStateOnServer('brightness', int(params[4]))
+                    trigger = ( fan['light_level'] != '' )
+                    self.DebugMsg('Changing light level to %s (trigger:%s)' % (params[4], trigger))
+                    dev.updateStateOnServer('brightness', int(params[4]), triggerEvents = trigger)
                     fan['light_level'] = params[4]
-                    self.updateStatusString(fan)
             elif ';FAN;SPD;ACTUAL;' in cmdStr:
                 if fan['fan_level'] != params[4]:
-                    if fan['fan_level'] != '':
-                        self.DebugMsg('Changing fan speed to %s' % (params[4]))
-                        dev.updateStateOnServer('speed', int(params[4]))
+                    trigger = ( fan['fan_level'] != '' )
+                    self.DebugMsg('Changing fan speed to %s (trigger: %s)' % (params[4], trigger))
+                    dev.updateStateOnServer('speed', int(params[4]), triggerEvents = trigger)
                     fan['fan_level'] = params[4]
-                    self.updateStatusString(fan)
             elif ';FAN;AUTO;' in cmdStr:
                 if fan['fan_auto'] != params[3]:
-                    if fan['fan_auto'] != '':
-                        self.DebugMsg('Changing fan motion to %s' % (params[3]))
-                        dev.updateStateOnServer('fan_motion', params[3])
+                    trigger = ( fan['fan_auto'] != '' )
+                    self.DebugMsg('Changing fan motion to %s (trigger: %s)' % (params[3], trigger))
+                    dev.updateStateOnServer('fan_motion', params[3], triggerEvents = trigger)
                     fan['fan_auto'] = params[3]
             elif ';LIGHT;AUTO;' in cmdStr:
                 if fan['light_auto'] != params[3]:
-                    if fan['light_auto'] != '':
-                        self.DebugMsg('Changing light motion to %s' % (params[3]))
-                        dev.updateStateOnServer('light_motion', params[3])
+                    trigger = ( fan['light_auto'] != '' )
+                    self.DebugMsg('Changing light motion to %s (trigger: %s)' % (params[3], trigger))
+                    dev.updateStateOnServer('light_motion', params[3], triggerEvents = trigger)
                     fan['light_auto'] = params[3]
             elif ';LIGHT;PWR;' in cmdStr:
                 if fan['light'] != params[3]:
-                    if fan['light'] != '':
-                        self.DebugMsg('Changing light to %s' % (params[3]))
-                        dev.updateStateOnServer('light', (params[3] == 'ON'))
+                    trigger = ( fan['light'] != '' )
+                    self.DebugMsg('Changing light to %s (trigger: %s)' % (params[3], trigger))
+                    dev.updateStateOnServer('light', (params[3] == 'ON'))
                     fan['light'] = params[3]
-                    self.updateStatusString(fan)
             elif ';FAN;PWR;' in cmdStr:
                 if fan['fan'] != params[3]:
-                    if fan['fan'] != '':
-                        self.DebugMsg('Changing fan to %s' % (params[3]))
-                        dev.updateStateOnServer('fan', (params[3] == 'ON'))
+                    trigger = ( fan['fan'] != '' )
+                    self.DebugMsg('Changing fan to %s (trigger: %s)' % (params[3], trigger))
+                    dev.updateStateOnServer('fan', (params[3] == 'ON'), triggerEvents = trigger)
                     fan['fan'] = params[3]
-                    self.updateStatusString(fan)
             elif ';DEVICE;ID;' in cmdStr:
                 if fan['MAC'] != params[3]:
                     props = dev.pluginProps
-                    props["address"] = addr[0] 
+                    props["address"] = addr[0]
                     self.DebugMsg("Setting MAC to '%s'" % ( params[3] ))
                     fan['MAC'] = params[3] # MAC address
                     props["fanMAC"] = fan['MAC']
                     dev.replacePluginPropsOnServer(props)
             elif ';SMARTMODE;ACTUAL' in cmdStr:
                 if fan['smartmode'] != params[3]:
-                    if fan['smartmode'] != '':
-                        self.DebugMsg('Changing smartmode to %s' % (params[3]))
-                        dev.updateStateOnServer('smartmode', params[3])
+                    trigger = ( fan['smartmode'] != '' )
+                    self.DebugMsg('Changing smartmode to %s (trigger: %s)' % (params[3], trigger))
+                    dev.updateStateOnServer('smartmode', params[3], triggerEvents = trigger)
                     fan['smartmode'] = params[3]
             elif ';SNSROCC;STATUS;' in cmdStr:
                 if fan['motion'] != params[3]:
-                    if fan['motion'] != '':
-                        self.DebugMsg('Changing motion to %s' % (params[3]))
-                        dev.updateStateOnServer('motion', (params[3] == 'OCCUPIED'))
+                    trigger = ( fan['motion'] != '' )
+                    self.DebugMsg('Changing motion to %s (trigger: %s)' % (params[3], trigger))
+                    dev.updateStateOnServer('motion', (params[3] == 'OCCUPIED'))
                     fan['motion'] = params[3]
             elif ';FAN;WHOOSH;STATUS;' in cmdStr:
-                if fan['motion'] != params[4]:
-                    if fan['whoosh'] != '':
-                        self.DebugMsg('Changing whoosh to %s' % (params[4]))
-                        dev.updateStateOnServer('whoosh', params[4])
+                if fan['whoosh'] != params[4]:
+                    trigger = ( fan['whoosh'] != '' )
+                    self.DebugMsg('Changing whoosh to %s (trigger: %s)' % (params[4], trigger))
+                    dev.updateStateOnServer('whoosh', params[4], triggerEvents = trigger)
                     fan['whoosh'] = params[4]
+            elif ';DEVICE;BEEPER;' in cmdStr:
+                if fan['beep'] != params[3]:
+                    trigger = ( fan['beep'] != '' )
+                    self.DebugMsg('Changing beep to %s (trigger: %s)' % (params[3], trigger))
+                    dev.updateStateOnServer('beep', params[3], triggerEvents = trigger)
+                    fan['beep'] = params[3]
+            elif ';DEVICE;INDICATORS;' in cmdStr:
+                if fan['indicators'] != params[3]:
+                    trigger = ( fan['indicators'] != '' )
+                    self.DebugMsg('Changing indicators to %s (trigger: %s)' % (params[3], trigger))
+                    dev.updateStateOnServer('indicators', params[3], triggerEvents = trigger)
+                    fan['indicators'] = params[3]
+            elif ';FAN;DIR;' in cmdStr: # FWD or REV
+                if params[3] == 'FWD':
+                    direction = "forward"
+                elif params[3] == 'REV':
+                    direction = "reverse"
+                else:
+                    direction = "unknown"
+                if fan['direction'] != direction:
+                    trigger = ( fan['direction'] != '' )
+                    self.DebugMsg('Changing direction to %s (trigger: %s)' % (direction, trigger))
+                    dev.updateStateOnServer('direction', direction, triggerEvents = trigger)
+                    fan['direction'] = direction
+            elif ';LEARN;ZEROTEMP;' in cmdStr:
+                if fan['coolingIdealTemp'] != params[3]:
+                    trigger = ( fan['coolingIdealTemp'] != '' )
+                    tempUnits = dev.pluginProps['fanTempUnits']
+                    if tempUnits == 'C':
+                        temp = str(int(params[3]) / 100)
+                    else:
+                        # Divide by 100, then F = C * 9/5 + 32
+                        temp = str(float((int(params[3]) / 100) * 9 ) / 5 + 32)
+
+                    uiTemp = "%s %s" % ( temp, tempUnits )
+
+                    self.DebugMsg('Changing cooling ideal temperature %s %s (trigger: %s)' % (temp, tempUnits, trigger))
+                    dev.updateStateOnServer('coolingIdealTemp', temp, triggerEvents = trigger, uiValue = uiTemp)
+                    fan['coolingIdealTemp'] = params[3]
+            elif ';SMARTSLEEP;IDEALTEMP;' in cmdStr:
+                if fan['sleepIdealTemp'] != params[3]:
+                    trigger = ( fan['sleepIdealTemp'] != '' )
+                    tempUnits = dev.pluginProps['fanTempUnits']
+                    if tempUnits == 'C':
+                        temp = str(int(params[3]) / 100)
+                    else:
+                        # Divide by 100, then F = C * 9/5 + 32
+                        temp = str(float((int(params[3]) / 100) * 9 ) / 5 + 32)
+
+                    uiTemp = "%s %s" % ( temp, tempUnits )
+
+                    self.DebugMsg('Changing sleep ideal temperature %s %s (trigger: %s)' % (temp, tempUnits, trigger))
+                    dev.updateStateOnServer('sleepIdealTemp', temp, triggerEvents = trigger, uiValue = uiTemp)
+                    fan['sleepIdealTemp'] = params[3]
+            elif ';SLEEP;STATE;' in cmdStr:
+                if fan['sleepMode'] != params[3]:
+                    trigger = ( fan['sleepMode'] != '' )
+                    self.DebugMsg('Changing sleep mode to %s (trigger: %s)' % (params[3], trigger))
+                    dev.updateStateOnServer('sleepMode', params[3], triggerEvents = trigger)
+                    fan['sleepMode'] = params[3]
+
+            self.updateStatusString(fan)
 
     ########################################
     def runConcurrentThread(self):
@@ -426,6 +502,13 @@ class Plugin(indigo.PluginBase):
                     fan['smartmode'] = ''
                     fan['motion'] = ''
                     fan['whoosh'] = ''
+                    fan['beep'] = ''
+                    fan['indicators'] = ''
+                    fan['direction'] = ''
+                    fan['coolingIdealTemp'] = ''
+                    fan['sleepIdealTemp'] = ''
+                    fan['status_string'] = ''
+                    fan['sleepMode'] = ''
                     self.getFanStatus(fan)
 
                 elif msgtype == MSG_FAN:
@@ -436,11 +519,12 @@ class Plugin(indigo.PluginBase):
             except Queue.Empty as e:
                 self.sleep(1)
                 continue
-        
+
     ########################################
     def validateDeviceConfigUi(self, valuesDict, typeId, devId):
         fanIP = valuesDict['fanIP']
         fanName = valuesDict['fanName']
+        tempUnits = valuesDict['fanTempUnits']
         errorsDict = indigo.Dict()
         anError = False
 
@@ -453,10 +537,25 @@ class Plugin(indigo.PluginBase):
             errorsDict['fanName'] = "Fan name can not be blank"
             anError = True
 
-
         if anError:
             return (False, valuesDict, errorsDict)
-            
+
+        dev = indigo.devices[devId]
+        fan = self.allfans[dev.id]
+
+        if tempUnits == 'C':
+            temp = int(float(fan['coolingIdealTemp']) / 100.0)
+            dev.updateStateOnServer('coolingIdealTemp', temp)
+
+            temp = int(float(fan['sleepIdealTemp']) / 100.0)
+            dev.updateStateOnServer('sleepIdealTemp', temp)
+        else:
+            temp = int((int(fan['coolingIdealTemp']) / 100.0) * 9 / 5) + 32
+            dev.updateStateOnServer('coolingIdealTemp', temp)
+
+            temp = int((int(fan['sleepIdealTemp']) / 100.0) * 9 / 5) + 32
+            dev.updateStateOnServer('sleepIdealTemp', temp)
+
         msg = "<%s;DEVICE;ID;GET>" % ( fanName )
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         sock.sendto(msg, (fanIP, 31415))
@@ -501,8 +600,8 @@ class Plugin(indigo.PluginBase):
         sock.sendto(msg, (fanIP, 31415))
 
     ########################################
-    def validateActionConfigUi(self, valuesDict, typeId, actionId):
-        self.DebugMsg(u"validating config for %s:%s" % (actionId, typeId))
+    def validateActionConfigUi(self, valuesDict, typeId, deviceId):
+        self.DebugMsg(u"validating config for %s:%s" % (deviceId, typeId))
         if typeId == 'fanLightBrightness':
             try:
                 i = int(valuesDict['lightLevel'])
@@ -555,7 +654,38 @@ class Plugin(indigo.PluginBase):
                 errorDict = indigo.Dict()
                 errorDict["speed"] = "Speed must be an integer between 1 and 7"
                 return (False, valuesDict, errorDict)
+        elif typeId == 'fanSmartSleepIdealTemp':
+            try:
+                dev = indigo.devices[deviceId]
+                tempUnits = dev.pluginProps['fanTempUnits']
 
+                if tempUnits == 'C':
+                    i = float(valuesDict['sleepTemp'])
+                    if i < 10.0 or i > 32.0:
+                        errorDict = indigo.Dict()
+                        errorDict["sleepTemp"] = "Temperature must be between 10 and 32 degrees Celsius"
+                        return (False, valuesDict, errorDict)
+                    elif (i * 10.0) % 5 != 0.0:
+                        errorDict = indigo.Dict()
+                        errorDict["sleepTemp"] = "Temperature must be in 0.5 degree increments Celsius"
+                        return (False, valuesDict, errorDict)
+                    else:
+                        return True
+                else: # tempUnits == 'F'
+                    i = int(valuesDict['sleepTemp'])
+                    if i < 50 or i > 90:
+                        errorDict = indigo.Dict()
+                        errorDict["sleepTemp"] = "Temperature must be between 50 and 90 degrees Farenheight"
+                        return (False, valuesDict, errorDict)
+                    else:
+                        return True
+            except:
+                errorDict = indigo.Dict()
+                if tempUnits == 'C':
+                    errorDict["sleepTemp"] = "Temperature must be a number"
+                else:
+                    errorDict["sleepTemp"] = "Temperature must be an integer"
+                return (False, valuesDict, errorDict)
         return True
 
     ########################################
@@ -812,3 +942,188 @@ class Plugin(indigo.PluginBase):
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         sock.sendto(msg, (fanIP, 31415))
 
+    ########################################
+    def setFanDirectionForward(self, action):
+        dev = indigo.devices[action.deviceId]
+        fan = self.allfans[dev.id]
+
+        f = fan['MAC']
+        if f == '':
+            f = dev.pluginProps['fanName']
+
+        if f['fan_level'] != '0':
+            indigo.server.log("unable to set fan direction while fan is in motion", isError=True)
+            return
+
+        fanIP = dev.pluginProps['fanIP']
+        msg = "<%s;FAN;DIR;SET;FWD>" % ( f )
+
+        self.DebugMsg("Sending %s" % ( msg ))
+
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        sock.sendto(msg, (fanIP, 31415))
+
+    ########################################
+    def setFanDirectionReverse(self, action):
+        dev = indigo.devices[action.deviceId]
+        fan = self.allfans[dev.id]
+
+        f = fan['MAC']
+        if f == '':
+            f = dev.pluginProps['fanName']
+
+        if f['fan_level'] != '0':
+            indigo.server.log("unable to set fan direction while fan is in motion", isError=True)
+            return
+
+        fanIP = dev.pluginProps['fanIP']
+        msg = "<%s;FAN;DIR;SET;REV>" % ( f )
+
+        self.DebugMsg("Sending %s" % ( msg ))
+
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        sock.sendto(msg, (fanIP, 31415))
+
+    ########################################
+    def setFanIndicatorsOn(self, action):
+        dev = indigo.devices[action.deviceId]
+        fan = self.allfans[dev.id]
+
+        f = fan['MAC']
+        if f == '':
+            f = dev.pluginProps['fanName']
+
+        fanIP = dev.pluginProps['fanIP']
+        msg = "<%s;DEVICE;INDICATORS;ON>" % ( f )
+
+        self.DebugMsg("Sending %s" % ( msg ))
+
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        sock.sendto(msg, (fanIP, 31415))
+
+    ########################################
+    def setFanIndicatorsOff(self, action):
+        dev = indigo.devices[action.deviceId]
+        fan = self.allfans[dev.id]
+
+        f = fan['MAC']
+        if f == '':
+            f = dev.pluginProps['fanName']
+
+        fanIP = dev.pluginProps['fanIP']
+        msg = "<%s;DEVICE;INDICATORS;OFF>" % ( f )
+
+        self.DebugMsg("Sending %s" % ( msg ))
+
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        sock.sendto(msg, (fanIP, 31415))
+
+    ########################################
+    def setFanBeepOn(self, action):
+        dev = indigo.devices[action.deviceId]
+        fan = self.allfans[dev.id]
+
+        f = fan['MAC']
+        if f == '':
+            f = dev.pluginProps['fanName']
+
+        fanIP = dev.pluginProps['fanIP']
+        msg = "<%s;DEVICE;BEEPER;ON>" % ( f )
+
+        self.DebugMsg("Sending %s" % ( msg ))
+
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        sock.sendto(msg, (fanIP, 31415))
+
+    ########################################
+    def setFanBeepOff(self, action):
+        dev = indigo.devices[action.deviceId]
+        fan = self.allfans[dev.id]
+
+        f = fan['MAC']
+        if f == '':
+            f = dev.pluginProps['fanName']
+
+        fanIP = dev.pluginProps['fanIP']
+        msg = "<%s;DEVICE;BEEPER;OFF>" % ( f )
+
+        self.DebugMsg("Sending %s" % ( msg ))
+
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        sock.sendto(msg, (fanIP, 31415))
+
+    ########################################
+    def setFanSmartCoolingIdealTemp(self, action):
+        dev = indigo.devices[action.deviceId]
+
+        temp = action.props.get("coolingTemp")
+        tempUnits = dev.pluginProps['fanTempUnits']
+
+        if tempUnits == 'C':
+            newTemp = int(float(temp) * 100.0)
+        else:
+            newTemp = int((float((int(temp) - 32) * 5) / 9) * 100)
+
+        self.DebugMsg(u"set cooling temperature to %s %s (%s)" % (str(temp), tempUnits, str(newTemp)))
+
+        fanName = dev.pluginProps['fanName']
+        fanIP = dev.pluginProps['fanIP']
+        msg = "<%s;LEARN;ZEROTEMP;SET;%s>" % (fanName, str(newTemp))
+
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        sock.sendto(msg, (fanIP, 31415))
+
+    ########################################
+    def setFanSmartSleepIdealTemp(self, action):
+        dev = indigo.devices[action.deviceId]
+
+        temp = action.props.get("sleepTemp")
+        tempUnits = dev.pluginProps['fanTempUnits']
+
+        if tempUnits == 'C':
+            newTemp = int(float(temp) * 100.0)
+        else:
+            newTemp = int((float((int(temp) - 32) * 5) / 9) * 100)
+
+        self.DebugMsg(u"set sleep temperature to %s %s (%s)" % (str(temp), tempUnits, str(newTemp)))
+
+        fanName = dev.pluginProps['fanName']
+        fanIP = dev.pluginProps['fanIP']
+        msg = "<%s;SMARTSLEEP;IDEALTEMP;SET;%s>" % (fanName, str(newTemp))
+
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        sock.sendto(msg, (fanIP, 31415))
+
+    ########################################
+    def setFanSleepModeOn(self, action):
+        dev = indigo.devices[action.deviceId]
+        fan = self.allfans[dev.id]
+
+        f = fan['MAC']
+        if f == '':
+            f = dev.pluginProps['fanName']
+
+        fanIP = dev.pluginProps['fanIP']
+        msg = "<%s;SLEEP;STATE;ON>" % ( f )
+
+        self.DebugMsg("Sending %s" % ( msg ))
+
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        sock.sendto(msg, (fanIP, 31415))
+
+    ########################################
+    def setFanSleepModeOff(self, action):
+        dev = indigo.devices[action.deviceId]
+        fan = self.allfans[dev.id]
+
+        f = fan['MAC']
+        if f == '':
+            f = dev.pluginProps['fanName']
+
+        fanIP = dev.pluginProps['fanIP']
+        msg = "<%s;SLEEP;STATE;OFF>" % ( f )
+
+        self.DebugMsg("Sending %s" % ( msg ))
+
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        sock.sendto(msg, (fanIP, 31415))
