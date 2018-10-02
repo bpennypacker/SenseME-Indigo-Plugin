@@ -1,0 +1,17 @@
+v 0.7.0
+ - Added triggers and actions for the following:
+     - fan direction (enhancement request #7)
+     - LED indicators
+     - beep indicator
+     - Sleep Mode
+     - Smart Sleep ideal temperature
+     - Smart Cooling ideal temperature
+
+ - Added temperature units (F/C) to device properties
+ - Improved synchronization of fan state with Indigo
+ - Fixed updating of device state display (issue #8)
+
+v 0.6.1
+ - Initial version released to Inidgo Plugin Store
+ - Fix bug that prevented some messages from the fan being processed properly
+   due to being truncated
