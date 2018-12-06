@@ -273,8 +273,8 @@ class Plugin(indigo.PluginBase):
                 'beep'            : '',
                 'indicators'      : '',
                 'direction'       : '',
-                'coolingIdealTemp': '0',
-                'sleepIdealTemp'  : '0',
+                'coolingIdealTemp': '',
+                'sleepIdealTemp'  : '',
                 'status_string'   : '',
                 'sleepMode'       : '',
                 'dev'             : dev
