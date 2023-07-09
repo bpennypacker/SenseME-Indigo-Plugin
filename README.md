@@ -1,3 +1,6 @@
+# NOTE
+This project is no longer supported, in part because Big Ass Solutions has completely rewritten their firmware and this plug-in is not compatible with it, and in part because I no longer use Indigo. This project will remain on Github for historical purposes.
+
 # SenseME-Indigo-Plugin
 [Indigo](http://www.indigodomo.com)  Plugin for [Big Ass Solutions](http://www.bigasssolutions.com/) residential line of [Haiku ceiling fans](https://www.haikuhome.com) with [SenseME Technology](https://www.haikuhome.com/senseme).
 
